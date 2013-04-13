@@ -1,3 +1,12 @@
+2013-04-13 Version 0.19
+	Change log:
+		- Numeric, dates and times styling
+			Most general formats are available. It is also possible to create custom formats
+			Some information about how to create a format is here:
+				http://office.microsoft.com/en-us/excel-help/create-or-delete-a-custom-number-format-HP001216503.aspx
+		- Minor bug fixes
+		- Makefile to build the project as a library (by Eduardo Zacarias)
+
 2012-12-16 Version 0.18
 	Change log:
 		- Comments functionality added;

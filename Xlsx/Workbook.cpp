@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <locale>
 #include <algorithm>
 #include <string.h>
 #include <errno.h>
@@ -71,6 +72,8 @@ bool MakeDirectory(const _tstring& dirName)
 // ****************************************************************************
 CWorkbook::CWorkbook()
 {
+	m_commLastId = 0;
+
     m_charts.clear();
     m_worksheets.clear();
     m_sharedStrings.clear();
@@ -86,8 +89,10 @@ CWorkbook::CWorkbook()
 
     Style style;
 
+	style.numFormat.id = 0;
     m_styleList.Add(style);  // default style
 
+    style.numFormat.id = 1;
     style.fill.patternType = PATTERN_GRAY_125;
     m_styleList.Add(style);  // default style
 
@@ -411,12 +416,12 @@ bool CWorkbook::SaveContentType()
         << tag(_T("Override")) << attr(_T("PartName")) << _T("/docProps/core.xml") << attr(_T("ContentType")) << content_core << endtag()
         << tag(_T("Override")) << attr(_T("PartName")) << _T("/docProps/app.xml") << attr(_T("ContentType")) << content_app << endtag();
 
-        if (m_sharedStrings.size() != 0) {
+        if (!m_sharedStrings.empty()) {
 			xml_stream
 			<< tag(_T("Override")) << attr(_T("PartName")) << _T("/xl/sharedStrings.xml") << attr(_T("ContentType")) << content_sharedStr << endtag();
         }
 
-        if (m_comments.size() != 0) {
+        if (!m_comments.empty()) {
 			xml_stream
 			<< tag(_T("Default")) << attr(_T("Extension")) << _T("vml") << attr(_T("ContentType")) << content_vml << endtag();
 
@@ -822,6 +827,7 @@ bool CWorkbook::SaveStyles() const
     << tag(_T("styleSheet"))    << attr(_T("xmlns")) << ns_book << attr(_T("xmlns:mc")) << ns_mc
 								<< attr(_T("mc:Ignorable")) << _T("x14ac") << attr(_T("xmlns:x14ac")) << ns_x14ac;
 
+        AddNumberFormats(xml_stream);
         AddFonts(xml_stream);
         AddFills(xml_stream);
         AddBorders(xml_stream);
@@ -833,24 +839,26 @@ bool CWorkbook::SaveStyles() const
 
         << tag(_T("cellXfs"));
 
-    vector< pair<pair<int32_t, int32_t>, int32_t> > styleIndexes = m_styleList.GetIndexes();
+    vector<vector<size_t> > styleIndexes = m_styleList.GetIndexes();
     vector< pair<pair<EAlignHoriz, EAlignVert>, bool> > styleAligns = m_styleList.GetPositions();
     for (size_t i = 0; i < styleIndexes.size(); i++) {
-        pair<pair<int32_t, int32_t>, int32_t> index = styleIndexes[i];
+        vector<size_t> index = styleIndexes[i];
         pair<pair<EAlignHoriz, EAlignVert>, bool> align = styleAligns[i];
 
         xml_stream
-            << tag(_T("xf")) << attr(_T("numFmtId")) << 0
-							<< attr(_T("fontId")) << index.first.second
-							<< attr(_T("fillId")) << index.second
-							<< attr(_T("borderId")) << index.first.first;
+            << tag(_T("xf")) << attr(_T("numFmtId")) << index[StyleList::STYLE_LINK_NUM_FORMAT]
+							<< attr(_T("fontId")) << index[StyleList::STYLE_LINK_FONT]
+							<< attr(_T("fillId")) << index[StyleList::STYLE_LINK_FILL]
+							<< attr(_T("borderId")) << index[StyleList::STYLE_LINK_BORDER];
 
-        if (index.first.second != 0)
+        if (index[StyleList::STYLE_LINK_FONT] != 0)
             xml_stream   << attr(_T("applyFont")) << 1;
-        if (index.second != 0)
+        if (index[StyleList::STYLE_LINK_FILL] != 0)
             xml_stream   << attr(_T("applyFill")) << 1;
-        if (index.first.first != 0)
+        if (index[StyleList::STYLE_LINK_BORDER] != 0)
             xml_stream   << attr(_T("applyBorder")) << 1;
+		if (index[StyleList::STYLE_LINK_NUM_FORMAT != 0])
+			xml_stream   << attr(_T("applyNumberFormat")) << 1;
 
 		if (align.first.first != ALIGN_H_NONE || align.first.second != ALIGN_V_NONE || align.second != false) {
 			xml_stream
@@ -901,6 +909,161 @@ bool CWorkbook::SaveStyles() const
     // zip/xl/styles.xml -]
 
     return true;
+}
+
+// ****************************************************************************
+/// @brief  Appends number format section into styles file
+/// @param  stream reference to xml stream
+/// @return no
+// ****************************************************************************
+void CWorkbook::AddNumberFormats(xmlw::XmlStream& stream) const
+{
+	vector<NumFormat> nums = m_styleList.GetNumFormats();
+
+	size_t built_in_formats = 0;
+	for (size_t i = 0; i < nums.size(); i++)
+		if (nums[i].id < StyleList::BUILT_IN_STYLES_NUMBER)
+			built_in_formats++;
+
+	if (nums.size() - built_in_formats == 0) return;
+
+    stream
+    << tag(_T("numFmts")) << attr(_T("count")) << nums.size() - built_in_formats;
+
+    for (size_t i = 0; i < nums.size(); i++) {
+    	if (nums[i].id < StyleList::BUILT_IN_STYLES_NUMBER)
+			continue;
+
+        stream
+        << tag(_T("numFmt"))
+			<< attr(_T("numFmtId")) << nums[i].id
+			<< attr(_T("formatCode")) << CWorkbook::GetFormatCodeString(nums[i])
+        << endtag();
+    }
+
+	stream
+    << endtag();
+}
+
+// ****************************************************************************
+/// @brief  Converts numeric format object into its string representation
+/// @param  fmt reference to format to be converted
+/// @return String format code
+// ****************************************************************************
+_tstring CWorkbook::GetFormatCodeString(const NumFormat &fmt)
+{
+	if (fmt.formatString != _T("")) return fmt.formatString;
+
+	bool addNegative = false;
+	bool addZero = false;
+
+	if (fmt.positiveColor != NUMSTYLE_COLOR_DEFAULT) {
+		addNegative = addZero = true;
+	}
+
+	if (fmt.negativeColor != NUMSTYLE_COLOR_DEFAULT) {
+		addNegative = true;
+	}
+
+	if (fmt.zeroColor != NUMSTYLE_COLOR_DEFAULT) {
+		addZero = true;
+	}
+
+	_tstring thousandPrefix;
+	if (fmt.showThousandsSeparator) {
+		thousandPrefix = _T("#,##");
+	}
+
+	locale loc("");
+	string char_currency = use_facet<moneypunct<char> >(loc).curr_symbol();
+	TCHAR szCurrency[5] = { 0 };
+#ifdef UNICODE
+	int32_t res = wcstombs(szCurrency, char_currency.c_str(), sizeof(szCurrency));
+	if (res == -1) return _T("");
+#else
+	_stprintf(szCurrency, _T("%s"), char_currency.c_str());
+#endif
+	_tstring currency = _tstring(_T("&quot;")) + szCurrency + _T("&quot;");
+
+	_tstring resCode;
+	_tstring affix;
+	_tstring digits = _T("0");
+	if (fmt.numberOfDigitsAfterPoint != 0) {
+		digits.append(_T("."));
+		digits.append(fmt.numberOfDigitsAfterPoint, _T('0'));
+	}
+
+	switch (fmt.numberStyle) {
+		case NUMSTYLE_EXPONENTIAL:
+			affix = _T("E+00");
+			break;
+		case NUMSTYLE_PERCENTAGE:
+			affix = _T("%");
+			break;
+		case NUMSTYLE_FINANCIAL:
+			//_-* #,##0.00"$"_-;\-* #,##0.00"$"_-;_-* "-"??"$"_-;_-@_-
+
+			resCode = 	GetFormatCodeColor(fmt.positiveColor) + _T("_-* ") + thousandPrefix + digits + currency + _T("_-;") +
+						GetFormatCodeColor(fmt.negativeColor) + _T("\\-* ") + thousandPrefix + digits + currency + _T("_-;") +
+						_T("_-* &quot;-&quot;??") + currency + _T("_-;_-@_-");
+			break;
+		case NUMSTYLE_MONEY:
+			affix = currency;
+			break;
+		case NUMSTYLE_DATETIME:
+			resCode = _T("yyyy.mm.dd hh:mm:ss");
+			break;
+		case NUMSTYLE_DATE:
+			resCode = _T("yyyy.mm.dd");
+			break;
+		case NUMSTYLE_TIME:
+			resCode = _T("hh:mm:ss");
+			break;
+
+		case NUMSTYLE_GENERAL:
+		case NUMSTYLE_NUMERIC:
+		default:
+			affix = _T("");
+			break;
+	}
+
+	if (fmt.numberStyle == NUMSTYLE_GENERAL || fmt.numberStyle == NUMSTYLE_NUMERIC ||
+		fmt.numberStyle == NUMSTYLE_EXPONENTIAL || fmt.numberStyle == NUMSTYLE_PERCENTAGE ||
+		fmt.numberStyle == NUMSTYLE_MONEY) {
+
+		resCode = GetFormatCodeColor(fmt.positiveColor) + thousandPrefix + digits + affix;
+		if (addNegative) {
+			resCode += _T(";") + GetFormatCodeColor(fmt.negativeColor) + _T("\\-") + thousandPrefix + digits + affix;
+		}
+		if (addZero) {
+			if (addNegative == false) resCode += _T(";");
+			resCode += _T(";") + GetFormatCodeColor(fmt.zeroColor) + _T("0") + affix;
+		}
+	}
+
+	return resCode;
+}
+
+// ****************************************************************************
+/// @brief  Converts numeric format color into its string representation
+/// @param  color color code
+/// @return String color code
+// ****************************************************************************
+_tstring CWorkbook::GetFormatCodeColor(ENumericStyleColor color)
+{
+	switch (color) {
+		case NUMSTYLE_COLOR_BLACK:	return _T("[BLACK]");
+		case NUMSTYLE_COLOR_GREEN:	return _T("[Green]");
+		case NUMSTYLE_COLOR_WHITE:	return _T("[White]");
+		case NUMSTYLE_COLOR_BLUE:	return _T("[Blue]");
+		case NUMSTYLE_COLOR_MAGENTA:return _T("[Magenta]");
+		case NUMSTYLE_COLOR_YELLOW:	return _T("[Yellow]");
+		case NUMSTYLE_COLOR_CYAN:	return _T("[Cyan]");
+		case NUMSTYLE_COLOR_RED:	return _T("[Red]");
+
+		case NUMSTYLE_COLOR_DEFAULT:
+		default:					return _T("");
+	}
 }
 
 // ****************************************************************************
@@ -1166,7 +1329,7 @@ bool CWorkbook::SaveComments()
 	std::sort(m_comments.begin(), m_comments.end());
 
 	int active_sheet = m_comments[0].sheetIndex;
-	for (size_t i = 0; i <m_comments.size(); i++) {
+	for (size_t i = 0; i < m_comments.size(); i++) {
 		if (m_comments[i].sheetIndex == active_sheet) {
 			sheet_comments.push_back(&m_comments[i]);
 		}
@@ -1364,10 +1527,8 @@ void CWorkbook::AddComment(xmlw::XmlStream &xml_stream, const Comment &comment) 
 // ****************************************************************************
 void CWorkbook::AddCommentDrawing(xmlw::XmlStream &xml_stream, const Comment &comment) const
 {
-	static int curId = 0;
-
 	TCHAR szId[20] = { 0 };
-	_stprintf(szId, _T("_x0000_s%d"), 1000 + (++curId));
+	_stprintf(szId, _T("_x0000_s%d"), 1000 + (++m_commLastId));
 
 	TCHAR szStyle[MAX_PATH] = { 0 };
 	if (comment.x >= 0 && comment.y >= 0 && comment.width > 0 && comment.height > 0) {
@@ -1520,7 +1681,7 @@ bool CWorkbook::SaveWorkbook() const
             << endtag();
         }
 
-        if (m_sharedStrings.size() != 0) {
+        if (!m_sharedStrings.empty()) {
 			_stprintf(szId, _T("rId%d"), id++);
 			xml_stream
 			<< tag(_T("Relationship")) << attr(_T("Id")) << szId << attr(_T("Type")) << type_sharedStr << attr(_T("Target")) << _T("sharedStrings.xml")
@@ -1560,7 +1721,7 @@ bool CWorkbook::SaveWorkbook() const
 		TCHAR szId[10] = { 0 };
         TCHAR szPropValue[100] = { 0 };
 
-        if ( m_worksheets.size() > 0 || m_charts.size() > 0 ) {
+        if ( !m_worksheets.empty() || !m_charts.empty() ) {
             xml_stream << tag(_T("sheets"));
         }
 
@@ -1589,7 +1750,7 @@ bool CWorkbook::SaveWorkbook() const
 											<< attr(_T("r:id")) << szId << endtag();
         }
 
-        if ( m_worksheets.size() > 0 || m_charts.size() > 0 ) {
+        if ( !m_worksheets.empty() || !m_charts.empty() ) {
             xml_stream << endtag();
         }
 

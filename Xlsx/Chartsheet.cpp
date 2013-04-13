@@ -760,7 +760,7 @@ bool CChartsheet::Save()
 {
     {
         // [- /xl/charts/chartX.xml
-        if (m_seriesSet.size() == 0) return false;
+        if (m_seriesSet.empty()) return false;
 
         m_isOk = false; // whether saving succeed or not, the object is no more usable
 
@@ -831,7 +831,7 @@ bool CChartsheet::Save()
         }
 
 
-        if (m_seriesSetAdd.size() != 0) {
+        if (!m_seriesSetAdd.empty()) {
             switch(m_diagramm.typeAdditional) {
 				case CHART_LINEAR:
 				case CHART_BAR:

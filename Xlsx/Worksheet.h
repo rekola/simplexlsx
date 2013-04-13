@@ -124,7 +124,7 @@ void CWorksheet::AddCellRoutine(T data, int32_t style)
 
 	TCHAR szCoord[15] = { 0 };
 	GetCellCoord(CellCoord(m_row_index, m_offset_column + m_current_column), szCoord);
-	(*m_xmlStream) << tag(_T("c")) << attr(_T("r")) << szCoord << attr(_T("t")) << _T("n");
+	(*m_xmlStream) << tag(_T("c")) << attr(_T("r")) << szCoord;
 
 	if (style != 0) {  // default style is not necessary to sign explicitly
 		(*m_xmlStream) << attr(_T("s")) << style;

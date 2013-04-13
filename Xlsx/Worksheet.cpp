@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <limits>
+#include <iomanip>
 
 #include "SimpleXlsxDef.h"
 #include "Worksheet.h"
@@ -114,9 +116,6 @@ CWorksheet::~CWorksheet()
 // ****************************************************************************
 void CWorksheet::Init(uint32_t index, uint32_t frozenWidth, uint32_t frozenHeight, std::vector<ColumnWidth>& colWidths)
 {
-	setlocale(LC_ALL, "");
-	locale::global(locale(""));
-
     m_isOk = true;
     m_row_opened = false;
     m_current_column = 0;
@@ -171,7 +170,7 @@ void CWorksheet::Init(uint32_t index, uint32_t frozenWidth, uint32_t frozenHeigh
 			<< endtag()
 			<< tag(_T("sheetFormatPr")) << attr(_T("defaultRowHeight")) << 15 << attr(_T("x14ac:dyDescent")) << 0.25 << endtag();
 
-	if (colWidths.size() != 0) {
+	if (!colWidths.empty()) {
 		(*m_xmlStream)
 			<< tag(_T("cols"));
 	}
@@ -185,7 +184,7 @@ void CWorksheet::Init(uint32_t index, uint32_t frozenWidth, uint32_t frozenHeigh
 				<< endtag();
 	}
 
-	if (colWidths.size() != 0) {
+	if (!colWidths.empty()) {
 		(*m_xmlStream)
 			<< endtag();
 	}
@@ -277,19 +276,23 @@ void CWorksheet::AddCell(const CellDataTime& data)
 {
 	TCHAR szCoord[15] = { 0 };
 	GetCellCoord(CellCoord(m_row_index, m_offset_column + m_current_column), szCoord);
-	(*m_xmlStream) << tag(_T("c")) << attr(_T("r")) << szCoord << attr(_T("t")) << _T("str");
+	(*m_xmlStream) << tag(_T("c")) << attr(_T("r")) << szCoord;// << attr(_T("t")) << _T("str");
 
 	if (data.style_id != 0) {  // default style is not necessary to sign explisitly
 		(*m_xmlStream) << attr(_T("s")) << data.style_id;
 	}
 
-	const int32_t timeFormatLen = 30;
-	TCHAR szTime[timeFormatLen] = { 0 };
-	struct tm *timeinfo = localtime(&data.value);
+	const int64_t secondsFrom1900to1970 = 2208988800;
+	const double excelOneSecond = 0.0000115740740740741;
 
-	_tcsftime(szTime, timeFormatLen, _T("%Y.%m.%d %X"), timeinfo);
+	struct tm *t = localtime(&data.value);
+	time_t timeSinceEpoch = t->tm_sec + t->tm_min*60 + t->tm_hour*3600 + t->tm_yday*86400 +
+							(t->tm_year-70)*31536000 + ((t->tm_year-69)/4)*86400 -
+							((t->tm_year-1)/100)*86400 + ((t->tm_year+299)/400)*86400;
 
-	(*m_xmlStream) << tag(_T("v")) << chardata() << szTime << endtag();
+	double value = excelOneSecond * (secondsFrom1900to1970 + timeSinceEpoch) + 2;
+
+	(*m_xmlStream) << tag(_T("v")) << chardata() << std::setprecision(std::numeric_limits<double>::digits10) << value << endtag();
 	(*m_xmlStream) << endtag(); // c
 
 	m_current_column++;
@@ -632,7 +635,7 @@ bool CWorksheet::Save()
 {
     (*m_xmlStream) << endtag(); // close sheetData tag
 
-	if (m_mergedCells.size() != 0) {
+	if (!m_mergedCells.empty()) {
         (*m_xmlStream) << tag(_T("mergeCells")) << attr(_T("count")) << m_mergedCells.size();
 	}
 
@@ -640,7 +643,7 @@ bool CWorksheet::Save()
 		(*m_xmlStream) << tag(_T("mergeCell")) << attr(_T("ref")) << m_mergedCells[i].c_str() << endtag();
 	}
 
-	if (m_mergedCells.size() != 0) {
+	if (!m_mergedCells.empty()) {
         (*m_xmlStream) << endtag();
 	}
 
