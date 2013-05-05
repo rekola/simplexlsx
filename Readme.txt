@@ -1,3 +1,7 @@
+2013-05-05 Version 0.19 update
+	Change log:
+		- License headers were added (BSD "3-clause license")
+
 2013-04-13 Version 0.19
 	Change log:
 		- Numeric, dates and times styling
