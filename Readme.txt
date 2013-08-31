@@ -1,3 +1,7 @@
+2013-09-01 Version 0.20
+	Change log:
+		- Bug fix (SaveStyles and GetFormatCodeString methods fixed)
+
 2013-05-05 Version 0.19 update
 	Change log:
 		- License headers were added (BSD "3-clause license")

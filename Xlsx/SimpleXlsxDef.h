@@ -56,7 +56,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	typedef std::ostream		_tstream;
 #endif // _UNICODE
 
-#define SIMPLE_XLSX_VERSION	_T("0.19")
+#define SIMPLE_XLSX_VERSION	_T("0.20")
 
 namespace SimpleXlsx {
 

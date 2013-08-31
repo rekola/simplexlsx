@@ -886,7 +886,7 @@ bool CWorkbook::SaveStyles() const
             xml_stream   << attr(_T("applyFill")) << 1;
         if (index[StyleList::STYLE_LINK_BORDER] != 0)
             xml_stream   << attr(_T("applyBorder")) << 1;
-		if (index[StyleList::STYLE_LINK_NUM_FORMAT != 0])
+		if (index[StyleList::STYLE_LINK_NUM_FORMAT] != 0)
 			xml_stream   << attr(_T("applyNumberFormat")) << 1;
 
 		if (align.first.first != ALIGN_H_NONE || align.first.second != ALIGN_V_NONE || align.second != false) {
@@ -1005,7 +1005,7 @@ _tstring CWorkbook::GetFormatCodeString(const NumFormat &fmt)
 
 	locale loc("");
 	string char_currency = use_facet<moneypunct<char> >(loc).curr_symbol();
-	TCHAR szCurrency[5] = { 0 };
+	TCHAR szCurrency[10] = { 0 };
 #ifdef UNICODE
 	int32_t res = wcstombs(szCurrency, char_currency.c_str(), sizeof(szCurrency));
 	if (res == -1) return _T("");
