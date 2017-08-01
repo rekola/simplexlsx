@@ -1,14 +1,19 @@
 #include <stdint.h>
 
+#include "../PathManager.hpp"
+
 #ifdef _WIN32
 #include <windows.h>
 #else
+//#include <cwchar>
+#include <wchar.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <time.h>
+
 
 #define far
 #define near
@@ -2247,9 +2252,12 @@ ZRESULT GetFileInfo(HANDLE hf, ulg *attr, long *size, iztimes *times, ulg *times
     *timestamp = (WORD)dostime | (((DWORD)dosdate)<<16);
   }
 #else
-  TCHAR szLink[MAX_PATH] = { 0 };
-  TCHAR fn[MAX_PATH] = { 0 };
-  _stprintf(szLink, _T("/proc/self/fd/%d"), fileno((FILE*)hf));
+  //TCHAR szLink[MAX_PATH] = { 0 };
+    char szLink[MAX_PATH] = { 0 };
+  //TCHAR fn[MAX_PATH] = { 0 };
+    char fn[MAX_PATH] = { 0 };
+  //_stprintf( szLink, _T("/proc/self/fd/%d"), fileno( (FILE*)hf ) );
+  snprintf( szLink, MAX_PATH, "/proc/self/fd/%d", fileno( (FILE*)hf ) );
   if (readlink(szLink, fn, sizeof(fn)) == -1) return ZR_NOFILE;
 
   struct stat s;
@@ -2294,7 +2302,8 @@ ZRESULT GetFileInfo(HANDLE hf, ulg *attr, long *size, iztimes *times, ulg *times
 
 class TZip
 { public:
-  TZip(const char *pwd) : hfout(0),mustclosehfout(false),hmapout(0),zfis(0),obuf(0),hfin(0),writ(0),oerr(false),hasputcen(false),ooffset(0),encwriting(false),encbuf(0),password(0), state(0) {if (pwd!=0 && *pwd!=0) {password=new char[strlen(pwd)+1]; strcpy(password,pwd);}}
+  //TZip(const char *pwd) : hfout(0),mustclosehfout(false),hmapout(0),zfis(0),obuf(0),hfin(0),writ(0),oerr(false),hasputcen(false),ooffset(0),encwriting(false),encbuf(0),password(0), state(0) {if (pwd!=0 && *pwd!=0) {password=new char[strlen(pwd)+1]; strcpy(password,pwd);}}
+    TZip(const char *pwd) : password(0),hfout(0),mustclosehfout(false),hmapout(0),ooffset(0),oerr(false),writ(0),obuf(0),hasputcen(false),encwriting(false),encbuf(0),zfis(0), state(0),hfin(0) {if (pwd!=0 && *pwd!=0) {password=new char[strlen(pwd)+1]; strcpy(password,pwd);}}
   ~TZip() {if (state!=0) delete state; state=0; if (encbuf!=0) delete[] encbuf; encbuf=0; if (password!=0) delete[] password; password=0;}
 
   // These variables say about the file we're writing into
@@ -2394,7 +2403,10 @@ ZRESULT TZip::Create(void *z,unsigned int len,DWORD flags)
     hfout = CreateFile(fn,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
     if (hfout==INVALID_HANDLE_VALUE) {hfout=0; return ZR_NOFILE;}
 #else
-    hfout = fopen(fn, "w");
+
+    //hfout = fopen(fn, "w");
+    hfout = fopen( SimpleXlsx::PathManager::PathEncode( fn ).c_str(), "w");
+
     if ((FILE*)hfout == NULL) {return ZR_NOFILE;}
 #endif  // _WIN32
     ocanseek=true;
@@ -2528,7 +2540,10 @@ ZRESULT TZip::open_file(const TCHAR *fn)
   ZRESULT res = open_handle(hf,0);
   if (res!=ZR_OK) {CloseHandle(hf); return res;}
 #else
-  FILE *fd = fopen(fn, "r");
+
+  //FILE *fd = fopen(fn, "r");
+  FILE *fd = fopen( SimpleXlsx::PathManager::PathEncode( fn ).c_str(), "r");
+
   if (fd == NULL) return ZR_NOFILE;
   ZRESULT res = open_handle(fd,0);
   if (res!=ZR_OK) {fclose(fd); return res;}
@@ -2740,7 +2755,10 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
 #ifdef UNICODE
   WideCharToMultiByte(CP_UTF8,0,dstzn,-1,zfi.iname,MAX_PATH,0,0);
 #else
-  strcpy(zfi.iname,dstzn);
+
+  //strcpy(zfi.iname,dstzn);
+    strcpy( zfi.iname, SimpleXlsx::PathManager::PathEncode( dstzn ).c_str() );
+
 #endif
   zfi.nam=strlen(zfi.iname);
   if (needs_trailing_slash) {strcat(zfi.iname,"/"); zfi.nam++;}
@@ -2805,7 +2823,8 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
   // generate some random bytes
   if (!has_seeded) {
     #ifdef _WIN32
-      srand(GetTickCount()^(unsigned long)GetDesktopWindow());
+      //srand(GetTickCount()^(unsigned long)GetDesktopWindow());
+      srand(GetTickCount()^GetCurrentThreadId() );
     #else
       srand(clock()^getpid());
     #endif  // _WIN32

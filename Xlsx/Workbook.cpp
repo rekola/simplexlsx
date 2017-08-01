@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef _WIN32
 #include <windows.h>	// for ZIP
 #include <direct.h>
+#include <iostream>
 #else
 #include <unistd.h>
 #include <sys/stat.h>
@@ -43,1787 +44,1293 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sys/syscall.h>
 #endif  // _WIN32_WINNT
 
-#include "../Zip/zip.h"
-
-#include "XlsxHeaders.h"
 #include "Workbook.h"
 
-#ifndef MAX_PATH
-#define MAX_PATH 260
-#endif
+#include "../Zip/zip.h"
 
-namespace SimpleXlsx {
+#include "Chart.h"
+#include "Drawing.h"
+#include "XlsxHeaders.h"
 
-using namespace std;
-using namespace xmlw;
+#include "../PathManager.hpp"
+#include "../XMLWriter.hpp"
 
-// ****************************************************************************
-/// @brief  Namespace-owned global function to create nested directories` tree
-/// @param  dirName directories` tree to be created
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool MakeDirectory(const _tstring& dirName)
+namespace SimpleXlsx
 {
-    _tstring part = _T("");
-    int32_t oldPointer = 0;
-    int32_t currPointer = 0;
+    // ****************************************************************************
+    //
+    // CWorksheet class implementation
+    //
+    // ****************************************************************************
 
-    int32_t res = -1;
+    // ****************************************************************************
+    /// @brief  The class default constructor
+    /// @return no
+    // ****************************************************************************
+    CWorkbook::CWorkbook( const _tstring & UserName ) : m_UserName( UserName )
+    {
+        m_commLastId = 0;
+        m_sheetId = 1;
+        m_activeSheetIndex = 0;
 
-    for (size_t i = 0; i < dirName.length(); i++) {
-        if (dirName.at(i) == _T('\\') || dirName.at(i) == _T('/')) {
-            part += dirName.substr(oldPointer, currPointer - oldPointer) + _T("/");
-            oldPointer = currPointer + 1;
+        m_chartsheets.clear();
+        m_worksheets.clear();
+        m_sharedStrings.clear();
 
-        #ifdef _WIN32
-            res = _tmkdir(part.c_str());
-        #else
-            res = _tmkdir(part.c_str(), 0777);
-        #endif
-            if (res == -1 && errno == ENOENT) return false;
-        }
+        Style style;
+        style.numFormat.id = 0;
+        m_styleList.Add( style ); // default style
 
-        currPointer++;
-    }
+        style.numFormat.id = 1;
+        style.fill.patternType = PATTERN_GRAY_125;
+        m_styleList.Add( style ); // default style
 
-    return true;
-}
-
-// ****************************************************************************
-//
-// CWorksheet class implementation
-//
-// ****************************************************************************
-
-// ****************************************************************************
-/// @brief  The class default constructor
-/// @return no
-// ****************************************************************************
-CWorkbook::CWorkbook()
-{
-	m_commLastId = 0;
-
-    m_charts.clear();
-    m_worksheets.clear();
-    m_sharedStrings.clear();
-
-    m_contentFiles.push_back(_T("[Content_Types].xml"));            // 0
-    m_contentFiles.push_back(_T("_rels/.rels"));                   // 1
-    m_contentFiles.push_back(_T("docProps/core.xml"));             // 2
-    m_contentFiles.push_back(_T("docProps/app.xml"));              // 3
-    m_contentFiles.push_back(_T("xl/workbook.xml"));               // 4
-    m_contentFiles.push_back(_T("xl/styles.xml"));                 // 5
-    m_contentFiles.push_back(_T("xl/_rels/workbook.xml.rels"));   // 6
-    m_contentFiles.push_back(_T("xl/theme/theme1.xml"));          // 7
-
-    Style style;
-
-	style.numFormat.id = 0;
-    m_styleList.Add(style);  // default style
-
-    style.numFormat.id = 1;
-    style.fill.patternType = PATTERN_GRAY_125;
-    m_styleList.Add(style);  // default style
-
-    TCHAR szTempDir[MAX_PATH] = { 0 };
+        _tstringstream TmpStringStream;
 #ifdef _WIN32
-    TCHAR *szPath = _tgetenv(_T("TEMP"));
-    _stprintf(szTempDir, _T("xlsx_%lu_%ld"), GetCurrentThreadId(), clock());
+        m_temp_path = _tgetenv( _T( "TEMP" ) );
+        TmpStringStream << _T( "/xlsx_" ) << GetCurrentThreadId() << _T( "_" ) << std::clock();
 #else
-    TCHAR *szPath = _tgetenv(_T("TMPDIR"));
-    _stprintf(szTempDir, _T("xlsx_%lu_%ld"), syscall(SYS_gettid), clock());
+
+        const int EnvVarCount = 4;
+        const char * EnvVar[ EnvVarCount ] = { "TMPDIR", "TMP",  "TEMP", "TEMPDIR" };
+        for( int i = 0; i < EnvVarCount; i++ )
+        {
+            const char * Ptr = getenv( EnvVar[ i ] );
+            if( Ptr != NULL )
+            {
+                std::string TmpString = Ptr;
+                m_temp_path = _tstring( TmpString.begin(), TmpString.end() );
+                break;
+            }
+        }
+        if( m_temp_path.empty() ) m_temp_path = _T( "/tmp" );
+        TmpStringStream << _T( "/xlsx_" ) << syscall( SYS_gettid ) << _T( "_" ) << std::clock();
+#endif
+        m_temp_path += TmpStringStream.str();
+
+        //Check the UserName
+        if( m_UserName.empty() )
+        {
+#ifdef _WIN32
+            m_UserName = _tgetenv( _T( "USERNAME" ) );
+#else
+
+#ifdef	_UNICODE
+            std::string TmpString = getenv( "USERNAME" );
+            m_UserName = _tstring( TmpString.begin(), TmpString.end() );
+#else
+            m_UserName = getenv( "USERNAME" );
 #endif
 
-    if (szPath) {
-        m_temp_path = szPath;
-        m_temp_path.append(_T("/"));
-    }
-    m_temp_path.append(szTempDir);
-}
-
-// ****************************************************************************
-/// @brief  The class destructor
-/// @return no
-// ****************************************************************************
-CWorkbook::~CWorkbook()
-{
-    for (size_t i = 0; i < m_worksheets.size(); i++)
-        delete m_worksheets[i];
-
-    for (size_t i = 0; i < m_charts.size(); i++)
-        delete m_charts[i];
-
-    m_charts.clear();
-    m_worksheets.clear();
-    m_contentFiles.clear();
-}
-
-// ****************************************************************************
-/// @brief  Adds another data sheet into the workbook
-/// @param  title chart page title
-/// @return Reference to a newly created object
-// ****************************************************************************
-CWorksheet& CWorkbook::AddSheet(const _tstring& title)
-{
-    CWorksheet *sheet = new (std::nothrow) CWorksheet(m_worksheets.size() + 1, m_temp_path);
-    sheet->SetTitle(title);
-    sheet->SetSharedStr(&m_sharedStrings);
-    sheet->SetComments(&m_comments);
-    m_worksheets.push_back(sheet);
-
-    return *m_worksheets[m_worksheets.size() - 1];
-}
-
-// ****************************************************************************
-/// @brief  Adds another data sheet into the workbook
-/// @param  title chart page title
-/// @param	colWidths list of pairs colNumber:Width
-/// @return Reference to a newly created object
-// ****************************************************************************
-CWorksheet& CWorkbook::AddSheet(const _tstring& title, std::vector<ColumnWidth>& colWidths)
-{
-    CWorksheet *sheet = new (std::nothrow) CWorksheet(m_worksheets.size() + 1, colWidths, m_temp_path);
-    sheet->SetTitle(title);
-    sheet->SetSharedStr(&m_sharedStrings);
-    sheet->SetComments(&m_comments);
-    m_worksheets.push_back(sheet);
-
-    return *m_worksheets[m_worksheets.size() - 1];
-}
-
-// ****************************************************************************
-/// @brief  Adds another data sheet with a frozen pane into the workbook
-/// @param  title chart page title
-/// @param  frozenWidth frozen pane width (in number of cells from 0)
-/// @param  frozenHeight frozen pane height (in number of cells from 0)
-/// @return Reference to a newly created object
-// ****************************************************************************
-CWorksheet& CWorkbook::AddSheet(const _tstring& title, uint32_t frozenWidth, uint32_t frozenHeight)
-{
-    CWorksheet *sheet = new (std::nothrow) CWorksheet(m_worksheets.size() + 1, frozenWidth, frozenHeight, m_temp_path);
-    sheet->SetTitle(title);
-    sheet->SetSharedStr(&m_sharedStrings);
-    sheet->SetComments(&m_comments);
-    m_worksheets.push_back(sheet);
-
-    return *m_worksheets[m_worksheets.size() - 1];
-}
-
-// ****************************************************************************
-/// @brief  Adds another data sheet with a frozen pane into the workbook
-/// @param  title chart page title
-/// @param  frozenWidth frozen pane width (in number of cells from 0)
-/// @param  frozenHeight frozen pane height (in number of cells from 0)
-/// @param	colWidths list of pairs colNumber:Width
-/// @return Reference to a newly created object
-// ****************************************************************************
-CWorksheet& CWorkbook::AddSheet(const _tstring& title, uint32_t frozenWidth, uint32_t frozenHeight, std::vector<ColumnWidth>& colWidths)
-{
-    CWorksheet *sheet = new (std::nothrow) CWorksheet(m_worksheets.size() + 1, frozenWidth, frozenHeight, colWidths, m_temp_path);
-    sheet->SetTitle(title);
-    sheet->SetSharedStr(&m_sharedStrings);
-    sheet->SetComments(&m_comments);
-    m_worksheets.push_back(sheet);
-
-    return *m_worksheets[m_worksheets.size() - 1];
-}
-
-// ****************************************************************************
-/// @brief  Adds another chart into the workbook
-/// @param  title chart page title
-/// @return Reference to a newly created object
-// ****************************************************************************
-CChartsheet& CWorkbook::AddChart(const _tstring& title)
-{
-    CChartsheet *chart = new (std::nothrow) CChartsheet(m_charts.size() + 1, m_temp_path);
-    chart->SetTitle(title);
-    m_charts.push_back(chart);
-
-    return *m_charts[m_charts.size() - 1];
-}
-
-// ****************************************************************************
-/// @brief  Adds another chart into the workbook
-/// @param  title chart page title
-/// @param  type type of main chart
-/// @return Reference to a newly created object
-// ****************************************************************************
-CChartsheet& CWorkbook::AddChart(const _tstring& title, EChartTypes type)
-{
-    CChartsheet *chart = new (std::nothrow) CChartsheet(m_charts.size() + 1, type, m_temp_path);
-    chart->SetTitle(title);
-    m_charts.push_back(chart);
-
-    return *m_charts[m_charts.size() - 1];
-}
-
-// ****************************************************************************
-/// @brief  Saves workbook into the specified file
-/// @param  name full path to the file
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::Save(const _tstring& name)
-{
-    if ( !SaveCore() || !SaveApp() || !SaveContentType() || !SaveTheme() ||
-         !SaveComments() || !SaveSharedStrings() || !SaveStyles() || !SaveWorkbook()) {
-         ClearTemp();
-         return false;
-    }
-
-    TCHAR szFilename[MAX_PATH] = { 0 };
-
-    for (size_t i = 0; i < m_worksheets.size(); i++) {
-        _stprintf(szFilename, _T("xl/worksheets/sheet%d.xml"), m_worksheets[i]->GetIndex());
-        m_contentFiles.push_back(szFilename);
-
-        if (m_worksheets[i]->IsThereComment()) {
-			_stprintf(szFilename, _T("xl/worksheets/_rels/sheet%d.xml.rels"), m_worksheets[i]->GetIndex());
-			m_contentFiles.push_back(szFilename);
+#endif
+            if( m_UserName.empty() ) m_UserName = _T( "Unknown" );
         }
 
-        if (m_worksheets[i]->Save() == false) {
-            ClearTemp();
-            return false;
-        }
+        m_pathManager = new PathManager( m_temp_path );
     }
 
-    for (size_t i = 0; i < m_charts.size(); i++) {
-        int32_t index = m_charts[i]->GetIndex();
-
-        _stprintf(szFilename, _T("xl/charts/chart%d.xml"), index);
-        m_contentFiles.push_back(szFilename);
-
-        _stprintf(szFilename, _T("xl/chartsheets/sheet%d.xml"), index);
-        m_contentFiles.push_back(szFilename);
-        _stprintf(szFilename, _T("xl/chartsheets/_rels/sheet%d.xml.rels"), index);
-        m_contentFiles.push_back(szFilename);
-
-        _stprintf(szFilename, _T("xl/drawings/drawing%d.xml"), index);
-        m_contentFiles.push_back(szFilename);
-        _stprintf(szFilename, _T("xl/drawings/_rels/drawing%d.xml.rels"), index);
-        m_contentFiles.push_back(szFilename);
-
-        if (m_charts[i]->Save() == false) {
-            ClearTemp();
-            return false;
-        }
-    }
-
-    bool bRetCode = true;
-
-    HZIP hZip = CreateZip(name.c_str(), NULL);  // create .zip without encryption
-    if (hZip != 0) {
-		TCHAR szPath[MAX_PATH] = { 0 };
-		for (size_t i = 0; i < m_contentFiles.size(); i++) {
-			memset(szPath, 0, sizeof(szPath));
-			_stprintf(szPath, _T("%s/%s"), m_temp_path.c_str(), m_contentFiles[i].c_str());
-			uint32_t res = ZipAdd(hZip, m_contentFiles[i].c_str(), szPath);
-			if (res != ZR_OK) {
-				bRetCode = false;
-				break;
-			}
-		}
-
-		CloseZip(hZip);
-    }
-    else {
-		bRetCode = false;
-    }
-
-    ClearTemp();
-    return bRetCode;
-}
-
-// ****************************************************************************
-/// @brief  ...
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::SaveCore() const
-{
+    // ****************************************************************************
+    /// @brief  The class destructor
+    /// @return no
+    // ****************************************************************************
+    CWorkbook::~CWorkbook()
     {
-        TCHAR szUserName[MAX_PATH] = { 0 };
-        TCHAR *szTempName = _tgetenv(_T("USERNAME"));
-        if (szTempName != NULL) _stprintf(szUserName, _T("%s"), szTempName);
-        else _stprintf(szUserName, _T("Unknown"));
+        for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
+            delete * it;
+        for( std::vector<CChartsheet *>::const_iterator it = m_chartsheets.begin(); it != m_chartsheets.end(); it++ )
+            delete * it;
+        for( std::vector<CChart *>::const_iterator it = m_charts.begin(); it != m_charts.end(); it++ )
+            delete * it;
+        for( std::vector<CDrawing *>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++ )
+            delete * it;
 
-        TCHAR szTime[MAX_PATH] = { 0 };
-		time_t t = time(0);
-		struct tm *timeinfo = localtime(&t);
-		_stprintf(szTime, _T("%4d-%02d-%02dT%02d:%02d:%02dZ"),
-            timeinfo->tm_year + 1900, timeinfo->tm_mon + 1, timeinfo->tm_mday,
-            timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+        delete m_pathManager;
+    }
 
-		// [- zip/docProps/core.xml
-		TCHAR szPathToFile[MAX_PATH] = { 0 };
-        _stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), m_contentFiles[2].c_str());
-        MakeDirectory(szPathToFile);
-        char szPath[MAX_PATH] = { 0 };
-#ifdef UNICODE
-        int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-        if (res == -1) return false;
-#else
-		_stprintf(szPath, _T("%s"), szPathToFile);
-#endif
-        _tofstream f(szPath);
-        xmlw::XmlStream xml_stream(f);
+    // ****************************************************************************
+    /// @brief  Adds another data sheet into the workbook
+    /// @param  title chart page title
+    /// @return Reference to a newly created object
+    // ****************************************************************************
+    CWorksheet & CWorkbook::AddSheet( const _tstring & title )
+    {
+        CWorksheet * sheet = new CWorksheet( m_sheetId++, * CreateDrawing(), * m_pathManager );
+        return InitWorkSheet( sheet, title );
+    }
 
-		xml_stream << prolog()
-		<< tag(_T("cp:coreProperties")) << attr(_T("xmlns:cp")) << ns_cp << attr(_T("xmlns:dc")) << ns_dc
-										<< attr(_T("xmlns:dcterms")) << ns_dcterms << attr(_T("xmlns:dcmitype")) << ns_dcmitype
-										<< attr(_T("xmlns:xsi")) << ns_xsi
-            << tag(_T("dc:creator")) << chardata() << szUserName << endtag()
-            << tag(_T("cp:lastModifiedBy")) << chardata() << szUserName << endtag()
-            << tag(_T("dcterms:created")) << attr(_T("xsi:type")) << xsi_type << chardata() << szTime << endtag()
-            << tag(_T("dcterms:modified")) << attr(_T("xsi:type")) << xsi_type << chardata() << szTime << endtag();
-		// zip/docProps/core.xml -]
-	}
+    // ****************************************************************************
+    /// @brief  Adds another data sheet into the workbook
+    /// @param  title chart page title
+    /// @param	colWidths list of pairs colNumber:Width
+    /// @return Reference to a newly created object
+    // ****************************************************************************
+    CWorksheet & CWorkbook::AddSheet( const _tstring & title, std::vector<ColumnWidth> & colWidths )
+    {
+        CWorksheet * sheet = new CWorksheet( m_sheetId++, colWidths, * CreateDrawing(), * m_pathManager );
+        return InitWorkSheet( sheet, title );
+    }
 
-	{
-		// [- zip/_rels/.rels
-		TCHAR szPathToFile[MAX_PATH] = { 0 };
-        _stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), m_contentFiles[1].c_str());
-        MakeDirectory(szPathToFile);
-        char szPath[MAX_PATH] = { 0 };
-#ifdef UNICODE
-        int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-        if (res == -1) return false;
-#else
-		_stprintf(szPath, _T("%s"), szPathToFile);
-#endif
-        _tofstream f(szPath);
-        xmlw::XmlStream xml_stream(f);
+    // ****************************************************************************
+    /// @brief  Adds another data sheet with a frozen pane into the workbook
+    /// @param  title chart page title
+    /// @param  frozenWidth frozen pane width (in number of cells from 0)
+    /// @param  frozenHeight frozen pane height (in number of cells from 0)
+    /// @return Reference to a newly created object
+    // ****************************************************************************
+    CWorksheet & CWorkbook::AddSheet( const _tstring & title, uint32_t frozenWidth, uint32_t frozenHeight )
+    {
+        CWorksheet * sheet = new CWorksheet( m_sheetId++, frozenWidth, frozenHeight, * CreateDrawing(), * m_pathManager );
+        return InitWorkSheet( sheet, title );
+    }
 
-        xml_stream << prolog()
-        << tag(_T("Relationships")) << attr(_T("xmlns")) << ns_relationships
-            << tag(_T("Relationship"))  << attr(_T("Id")) << _T("rId3")
-                                    << attr(_T("Type")) << type_app
-                                    << attr(_T("Target")) << _T("docProps/app.xml")
-            << endtag()
-            << tag(_T("Relationship"))  << attr(_T("Id")) << _T("rId2")
-									<< attr(_T("Type")) << type_core
-                                    << attr(_T("Target")) << _T("docProps/core.xml")
-            << endtag()
-            << tag(_T("Relationship"))  << attr(_T("Id")) << _T("rId1")
-                                    << attr(_T("Type")) << type_book
-                                    << attr(_T("Target")) << _T("xl/workbook.xml")
-            << endtag();
-		// zip/_rels/.rels -]
-	}
+    // ****************************************************************************
+    /// @brief  Adds another data sheet with a frozen pane into the workbook
+    /// @param  title chart page title
+    /// @param  frozenWidth frozen pane width (in number of cells from 0)
+    /// @param  frozenHeight frozen pane height (in number of cells from 0)
+    /// @param	colWidths list of pairs colNumber:Width
+    /// @return Reference to a newly created object
+    // ****************************************************************************
+    CWorksheet & CWorkbook::AddSheet( const _tstring & title, uint32_t frozenWidth, uint32_t frozenHeight, std::vector<ColumnWidth> & colWidths )
+    {
+        CWorksheet * sheet = new CWorksheet( m_sheetId++, frozenWidth, frozenHeight, colWidths, * CreateDrawing(), * m_pathManager );
+        return InitWorkSheet( sheet, title );
+    }
 
-	return true;
-}
+    CChart & CWorkbook::AddChart( CWorksheet & sheet, ChartPoint TopLeft, ChartPoint BottomRight, EChartTypes type )
+    {
+        CChart * chart = new CChart( m_charts.size() + 1, type, * m_pathManager );
+        m_charts.push_back( chart );
+        sheet.m_Drawing.AppendChart( chart, TopLeft, BottomRight );
+        return * chart;
+    }
 
-// ****************************************************************************
-/// @brief  ...
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::SaveContentType()
-{
-    TCHAR szPropValue[100] = { 0 };
+    // ****************************************************************************
+    /// @brief  Adds another chart sheet into the workbook
+    /// @param  title chart page title
+    /// @param  type type of main chart
+    /// @return Reference to a newly created object
+    // ****************************************************************************
+    CChartsheet & CWorkbook::AddChartSheet( const _tstring & title, EChartTypes type )
+    {
+        CChart * chart = new CChart( m_charts.size() + 1, type, * m_pathManager );
+        chart->SetTitle( title );
+        m_charts.push_back( chart );
 
-    // [- zip/[Content_Types].xml
-    TCHAR szPathToFile[MAX_PATH] = { 0 };
-    _stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), m_contentFiles[0].c_str());
-    MakeDirectory(szPathToFile);
-    char szPath[MAX_PATH] = { 0 };
-#ifdef UNICODE
-        int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-        if (res == -1) return false;
-#else
-		_stprintf(szPath, _T("%s"), szPathToFile);
-#endif
-        _tofstream f(szPath);
-    xmlw::XmlStream xml_stream(f);
+        CDrawing * drawing = CreateDrawing();
+        drawing->AppendChart( chart );
 
-    xml_stream << prolog()
-    << tag(_T("Types")) << attr(_T("xmlns")) << ns_content_types
-        << tag(_T("Default")) << attr(_T("Extension")) << _T("rels") << attr(_T("ContentType")) << content_rels << endtag()
-        << tag(_T("Default")) << attr(_T("Extension")) << _T("xml") << attr(_T("ContentType")) << content_xml << endtag()
-        << tag(_T("Override")) << attr(_T("PartName")) << _T("/xl/workbook.xml") << attr(_T("ContentType")) << content_book << endtag()
-        << tag(_T("Override")) << attr(_T("PartName")) << _T("/xl/theme/theme1.xml") << attr(_T("ContentType")) << content_theme << endtag()
-        << tag(_T("Override")) << attr(_T("PartName")) << _T("/xl/styles.xml") << attr(_T("ContentType")) << content_styles << endtag()
-        << tag(_T("Override")) << attr(_T("PartName")) << _T("/docProps/core.xml") << attr(_T("ContentType")) << content_core << endtag()
-        << tag(_T("Override")) << attr(_T("PartName")) << _T("/docProps/app.xml") << attr(_T("ContentType")) << content_app << endtag();
+        CChartsheet * chartsheet = new CChartsheet( m_sheetId++, * chart, * drawing, * m_pathManager );
+        m_chartsheets.push_back( chartsheet );
 
-        if (!m_sharedStrings.empty()) {
-			xml_stream
-			<< tag(_T("Override")) << attr(_T("PartName")) << _T("/xl/sharedStrings.xml") << attr(_T("ContentType")) << content_sharedStr << endtag();
+        return * chartsheet;
+    }
+
+    // ****************************************************************************
+    /// @brief  Saves workbook into the specified file
+    /// @param  name full path to the file
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::Save( const _tstring & name )
+    {
+        if( !SaveCore() || !SaveApp() || !SaveContentType() || !SaveTheme() ||
+                !SaveComments() || !SaveSharedStrings() || !SaveStyles() || !SaveWorkbook() )
+            return false;
+
+        for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
+            if( ( * it )->Save() == false ) return false;
+
+        for( std::vector<CChartsheet *>::const_iterator it = m_chartsheets.begin(); it != m_chartsheets.end(); it++ )
+            if( ( * it )->Save() == false ) return false;
+        for( std::vector<CChart *>::const_iterator it = m_charts.begin(); it != m_charts.end(); it++ )
+            if( ( * it )->Save() == false ) return false;
+        for( std::vector<CDrawing *>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++ )
+            if( ( * it )->Save() == false ) return false;
+
+        bool bRetCode = true;
+
+        HZIP hZip = CreateZip( name.c_str(), NULL ); // create .zip without encryption
+        if( hZip != 0 )
+        {
+            std::list<_tstring>::const_iterator end_it = m_pathManager->ContentFiles().end();
+            for( std::list<_tstring>::const_iterator it = m_pathManager->ContentFiles().begin(); it != end_it; it++ )
+            {
+                const _tstring & File = * it;
+                _tstring Path = m_temp_path + File;
+                ZRESULT res = ZipAdd( hZip, File.c_str() + 1, Path.c_str() );
+                if( res != ZR_OK )
+                {
+                    bRetCode = false;
+                    break;
+                }
+            }
+            CloseZip( hZip );
         }
+        else bRetCode = false;
 
-        if (!m_comments.empty()) {
-			xml_stream
-			<< tag(_T("Default")) << attr(_T("Extension")) << _T("vml") << attr(_T("ContentType")) << content_vml << endtag();
+        m_pathManager->ClearTemp();
+        return bRetCode;
+    }
 
-			TCHAR szTemp[200] = { 0 };
-			for (size_t i = 0; i < m_worksheets.size(); i++) {
-				if (m_worksheets[i]->IsThereComment()) {
-					_stprintf(szTemp, _T("/xl/comments%u.xml"), m_worksheets[i]->GetIndex());
+    CWorksheet & CWorkbook::InitWorkSheet( CWorksheet * sheet, const _tstring & title )
+    {
+        sheet->SetTitle( title );
+        sheet->SetSharedStr( & m_sharedStrings );
+        sheet->SetComments( & m_comments );
+        m_worksheets.push_back( sheet );
+        return * sheet;
+    }
 
-					xml_stream
-					<< tag(_T("Override")) << attr(_T("PartName")) << szTemp << attr(_T("ContentType")) << content_comment << endtag();
-				}
-			}
+    CDrawing * CWorkbook::CreateDrawing()
+    {
+        CDrawing * drawing = new CDrawing( m_drawings.size() + 1, * m_pathManager );
+        m_drawings.push_back( drawing );
+        return drawing;
+    }
+
+    // ****************************************************************************
+    /// @brief  ...
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::SaveCore()
+    {
+        {
+            std::time_t t = std::time( NULL );
+            const size_t MAX_USER_TIME_LENGTH   =   32;
+            char UserTime[ MAX_USER_TIME_LENGTH ] = { 0 };
+            std::strftime( UserTime, MAX_USER_TIME_LENGTH, "%Y-%m-%dT%H:%M:%SZ", std::localtime( & t ) ) ;
+
+            // [- zip/docProps/core.xml
+            XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/docProps/core.xml" ) ) );
+            xmlw.Tag( "cp:coreProperties" ).Attr( "xmlns:cp", ns_cp ).Attr( "xmlns:dc", ns_dc );
+            xmlw.Attr( "xmlns:dcterms", ns_dcterms ).Attr( "xmlns:dcmitype", ns_dcmitype ).Attr( "xmlns:xsi", ns_xsi );
+            xmlw.TagOnlyContent( "dc:creator", m_UserName );
+            xmlw.TagOnlyContent( "cp:lastModifiedBy", m_UserName );
+            xmlw.Tag( "dcterms:created" ).Attr( "xsi:type", xsi_type ).Cont( UserTime ).End();
+            xmlw.Tag( "dcterms:modified" ).Attr( "xsi:type", xsi_type ).Cont( UserTime ).End();
+            xmlw.End( "cp:coreProperties" );
+            // zip/docProps/core.xml -]
         }
+        {
+            // [- zip/_rels/.rels
+            XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/_rels/.rels" ) ) );
+            xmlw.Tag( "Relationships" ).Attr( "xmlns", ns_relationships );
+            const char * Node = "Relationship";
+            xmlw.TagL( Node ).Attr( "Id", "rId3" ).Attr( "Type", type_app ).Attr( "Target", "docProps/app.xml" ).EndL();
+            xmlw.TagL( Node ).Attr( "Id", "rId2" ).Attr( "Type", type_core ).Attr( "Target", "docProps/core.xml" ).EndL();
+            xmlw.TagL( Node ).Attr( "Id", "rId1" ).Attr( "Type", type_book ).Attr( "Target", "xl/workbook.xml" ).EndL();
+            xmlw.End( "Relationships" );
+            // zip/_rels/.rels -]
+        }
+        return true;
+    }
+
+    // ****************************************************************************
+    /// @brief  ...
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::SaveContentType()
+    {
+        // [- zip/[Content_Types].xml
+        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/[Content_Types].xml" ) ) );
+        xmlw.Tag( "Types" ).Attr( "xmlns", ns_content_types );
+        xmlw.TagL( "Default" ).Attr( "Extension", "rels" ).Attr( "ContentType", content_rels ).EndL();
+        xmlw.TagL( "Default" ).Attr( "Extension", "xml" ).Attr( "ContentType", content_xml ).EndL();
+        xmlw.TagL( "Override" ).Attr( "PartName", "/xl/workbook.xml" ).Attr( "ContentType", content_book ).EndL();
 
         bool bFormula = false;
-        for (size_t i = 0; i < m_worksheets.size(); i++) {
-            _stprintf(szPropValue, _T("/xl/worksheets/sheet%d.xml"), m_worksheets[i]->GetIndex());
-            xml_stream << tag(_T("Override")) << attr(_T("PartName")) << szPropValue << attr(_T("ContentType")) << content_sheet << endtag();
-
-            if (m_worksheets[i]->IsThereFormula()) bFormula = true;
+        for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
+        {
+            _tstringstream PropValue;
+            PropValue << "/xl/worksheets/sheet" << ( * it )->GetIndex() << ".xml";
+            xmlw.TagL( "Override" ).Attr( "PartName", PropValue.str() ).Attr( "ContentType", content_sheet ).EndL();
+            if( ( * it )->IsThereFormula() ) bFormula = true;
+        }
+        if( bFormula )
+        {
+            xmlw.TagL( "Override" ).Attr( "PartName", _tstring( _T( "/xl/calcChain.xml" ) ) ).Attr( "ContentType", content_chain ).EndL();
+            if( ! SaveChain() ) return false;
         }
 
-        if (bFormula) {
-            xml_stream << tag(_T("Override"))   << attr(_T("PartName")) << _T("/xl/calcChain.xml")
-                                            << attr(_T("ContentType")) << content_chain << endtag();
+        for( std::vector<CChartsheet *>::const_iterator it = m_chartsheets.begin(); it != m_chartsheets.end(); it++ )
+        {
+            _tstringstream PropValue;
+            PropValue << "/xl/chartsheets/sheet" << ( * it )->GetIndex() << ".xml";
+            xmlw.TagL( "Override" ).Attr( "PartName", PropValue.str() ).Attr( "ContentType", content_chartsheet ).EndL();
+        }
 
-            if (SaveChain() == false) {
-                return false;
+        xmlw.TagL( "Override" ).Attr( "PartName", _tstring( _T( "/xl/theme/theme1.xml" ) ) ).Attr( "ContentType", content_theme ).EndL();
+        xmlw.TagL( "Override" ).Attr( "PartName", _tstring( _T( "/xl/styles.xml" ) ) ).Attr( "ContentType", content_styles ).EndL();
+
+        if( ! m_sharedStrings.empty() )
+            xmlw.TagL( "Override" ).Attr( "PartName", "/xl/sharedStrings.xml" ).Attr( "ContentType", content_sharedStr ).EndL();
+
+        for( std::vector<CDrawing *>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++ )
+            if( ( * it )->IsEmpty() == false )
+            {
+                _tstringstream PropValue;
+                PropValue << "/xl/drawings/drawing" << ( * it )->GetIndex() << ".xml";
+                xmlw.TagL( "Override" ).Attr( "PartName", PropValue.str() ).Attr( "ContentType", content_drawing ).EndL();
+            }
+        for( std::vector<CChart *>::const_iterator it = m_charts.begin(); it != m_charts.end(); it++ )
+        {
+            _tstringstream PropValue;
+            PropValue << "/xl/charts/chart" << ( * it )->GetIndex() << ".xml";
+            xmlw.TagL( "Override" ).Attr( "PartName", PropValue.str() ).Attr( "ContentType", content_chart ).EndL();
+        }
+
+        if( ! m_comments.empty() )
+        {
+            xmlw.TagL( "Default" ).Attr( "Extension", "vml" ).Attr( "ContentType", content_vml ).EndL();
+
+            for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
+            {
+                if( ( * it )->IsThereComment() )
+                {
+                    _tstringstream Temp;
+                    Temp << "/xl/comments" << ( * it )->GetIndex() << ".xml";
+                    xmlw.TagL( "Override" ).Attr( "PartName", Temp.str() ).Attr( "ContentType", content_comment ).EndL();
+                }
             }
         }
 
-        for (size_t i = 0; i < m_charts.size(); i++) {
-            int32_t index = m_charts[i]->GetIndex();
+        xmlw.TagL( "Override" ).Attr( "PartName", _tstring( _T( "/docProps/core.xml" ) ) ).Attr( "ContentType", content_core ).EndL();
+        xmlw.TagL( "Override" ).Attr( "PartName", _tstring( _T( "/docProps/app.xml" ) ) ).Attr( "ContentType", content_app ).EndL();
 
-            _stprintf(szPropValue, _T("/xl/charts/chart%d.xml"), index);
-            xml_stream << tag(_T("Override")) << attr(_T("PartName")) << szPropValue << attr(_T("ContentType")) << content_chart << endtag();
-
-            _stprintf(szPropValue, _T("/xl/drawings/drawing%d.xml"), index);
-            xml_stream << tag(_T("Override")) << attr(_T("PartName")) << szPropValue << attr(_T("ContentType")) << content_drawing << endtag();
-
-            _stprintf(szPropValue, _T("/xl/chartsheets/sheet%d.xml"), index);
-            xml_stream << tag(_T("Override")) << attr(_T("PartName")) << szPropValue << attr(_T("ContentType")) << content_chartsheet << endtag();
-        }
-    // zip/[ContentTypes].xml -]
-
-    return true;
-}
-
-// ****************************************************************************
-/// @brief  ...
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::SaveApp() const
-{
-    // [- zip/docProps/app.xml
-    TCHAR szPathToFile[MAX_PATH] = { 0 };
-    _stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), m_contentFiles[3].c_str());
-    MakeDirectory(szPathToFile);
-    char szPath[MAX_PATH] = { 0 };
-#ifdef UNICODE
-        int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-        if (res == -1) return false;
-#else
-		_stprintf(szPath, _T("%s"), szPathToFile);
-#endif
-        _tofstream f(szPath);
-    xmlw::XmlStream xml_stream(f);
-
-    size_t nSheets = m_worksheets.size();
-    size_t nCharts = m_charts.size();
-    size_t nVectorSize = (nCharts > 0) ? 4 : 2;
-
-    xml_stream << prolog()
-    << tag(_T("Properties")) << attr(_T("xmlns")) << ns_doc_prop << attr(_T("xmlns:vt")) << ns_vt
-        << tag(_T("Application")) << chardata() << _T("Microsoft Excel") << endtag()
-        << tag(_T("DocSecurity")) << chardata() << 0 << endtag()
-        << tag(_T("ScaleCrop")) << chardata() << _T("false") << endtag()
-
-        << tag(_T("HeadingPairs"))
-            << tag(_T("vt:vector")) << attr(_T("size")) << nVectorSize << attr(_T("baseType")) << _T("variant")
-                << tag(_T("vt:variant")) << tag(_T("vt:lpstr")) << chardata() << _T("Worksheets") << endtag() << endtag()
-                << tag(_T("vt:variant")) << tag(_T("vt:i4")) << chardata() << nSheets << endtag() << endtag();
-
-    if (nCharts > 0) {
-        xml_stream
-        << tag(_T("vt:variant")) << tag(_T("vt:lpstr")) << chardata() << _T("Diagramms") << endtag() << endtag()
-        << tag(_T("vt:variant")) << tag(_T("vt:i4")) << chardata() << nCharts << endtag() << endtag();
+        xmlw.End( "Types" );
+        // zip/[ContentTypes].xml -]
+        return true;
     }
 
-    xml_stream
-            << endtag()
-        << endtag()
+    // ****************************************************************************
+    /// @brief  ...
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::SaveApp()
+    {
+        // [- zip/docProps/app.xml
+        size_t nSheets = m_worksheets.size();
+        size_t nCharts = m_chartsheets.size();
+        size_t nVectorSize = ( nCharts > 0 ) ? 4 : 2;
 
-        << tag(_T("TitlesOfParts"))
-            << tag(_T("vt:vector")) << attr(_T("size")) << nSheets + nCharts << attr(_T("baseType")) << _T("lpstr");
+        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/docProps/app.xml" ) ) );
+        xmlw.Tag( "Properties" ).Attr( "xmlns", ns_doc_prop ).Attr( "xmlns:vt", ns_vt );
+        xmlw.TagOnlyContent( "Application", "Microsoft Excel" );
+        xmlw.TagOnlyContent( "DocSecurity", 0 );
+        xmlw.TagOnlyContent( "ScaleCrop", "false" );
 
-    for (size_t i = 0; i < nSheets; i++) {
-        xml_stream << tag(_T("vt:lpstr")) << chardata() << m_worksheets[i]->GetTitle().c_str() << endtag();
+        xmlw.Tag( "HeadingPairs" ).Tag( "vt:vector" ).Attr( "size", nVectorSize ).Attr( "baseType", "variant" );
+        xmlw.Tag( "vt:variant" ).TagOnlyContent( "vt:lpstr", "Worksheets" ).End( "vt:variant" );
+        xmlw.Tag( "vt:variant" ).TagOnlyContent( "vt:i4", nSheets ).End( "vt:variant" );
+        if( nCharts > 0 )
+        {
+            xmlw.Tag( "vt:variant" ).TagOnlyContent( "vt:lpstr", "Diagramms" ).End( "vt:variant" );
+            xmlw.Tag( "vt:variant" ).TagOnlyContent( "vt:i4", nCharts ).End( "vt:variant" );
+        }
+        xmlw.End( "vt:vector" ).End( "HeadingPairs" );
+
+        xmlw.Tag( "TitlesOfParts" ).Tag( "vt:vector" ).Attr( "size", nSheets + nCharts ).Attr( "baseType", "lpstr" );
+        for( size_t i = 0; i < nSheets; i++ )
+            xmlw.TagOnlyContent( "vt:lpstr", m_worksheets[ i ]->GetTitle() );
+        for( size_t i = 0; i < nCharts; i++ )
+            //xmlw.TagOnlyContent( "vt:lpstr", m_chartsheets[ i ]->GetTitle() );
+            xmlw.TagOnlyContent( "vt:lpstr", m_chartsheets[ i ]->Chart().GetTitle() );
+        xmlw.End( "vt:vector" ).End( "TitlesOfParts" );
+
+        xmlw.TagOnlyContent( "Company", "" );
+        xmlw.TagOnlyContent( "LinksUpToDate", "false" );
+        xmlw.TagOnlyContent( "SharedDoc", "false" );
+        xmlw.TagOnlyContent( "HyperlinksChanged", "false" );
+        xmlw.TagOnlyContent( "AppVersion", 14.03 );         //Microsoft Excel 2010
+        xmlw.End( "Properties" );
+        // zip/docProps/app.xml -]
+        return true;
     }
 
-    for (size_t i = 0; i < nCharts; i++) {
-        xml_stream << tag(_T("vt:lpstr")) << chardata() << m_charts[i]->GetTitle().c_str() << endtag();
+    // ****************************************************************************
+    /// @brief  ...
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::SaveTheme()
+    {
+        // [- zip/xl/theme/theme1.xml
+        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/theme/theme1.xml" ) ) );
+        xmlw.Tag( "a:theme" ).Attr( "xmlns:a", ns_a ).Attr( "name", "Office Theme" );
+        xmlw.Tag( "a:themeElements" );
+
+        xmlw.Tag( "a:clrScheme" ).Attr( "name", "Office" );
+        xmlw.Tag( "a:dk1" ).TagL( "a:sysClr" ).Attr( "val", "windowText" ).Attr( "lastClr", "000000" ).EndL().End();
+        xmlw.Tag( "a:lt1" ).TagL( "a:sysClr" ).Attr( "val", "window" ).Attr( "lastClr", "FFFFFF" ).EndL().End();
+        xmlw.Tag( "a:dk2" ).TagL( "a:srgbClr" ).Attr( "val", "1F497D" ).EndL().End();
+        xmlw.Tag( "a:lt2" ).TagL( "a:srgbClr" ).Attr( "val", "EEECE1" ).EndL().End();
+        xmlw.Tag( "a:accent1" ).TagL( "a:srgbClr" ).Attr( "val", "4F81BD" ).EndL().End();
+        xmlw.Tag( "a:accent2" ).TagL( "a:srgbClr" ).Attr( "val", "C0504D" ).EndL().End();
+        xmlw.Tag( "a:accent3" ).TagL( "a:srgbClr" ).Attr( "val", "9BBB59" ).EndL().End();
+        xmlw.Tag( "a:accent4" ).TagL( "a:srgbClr" ).Attr( "val", "8064A2" ).EndL().End();
+        xmlw.Tag( "a:accent5" ).TagL( "a:srgbClr" ).Attr( "val", "4BACC6" ).EndL().End();
+        xmlw.Tag( "a:accent6" ).TagL( "a:srgbClr" ).Attr( "val", "F79646" ).EndL().End();
+        xmlw.Tag( "a:hlink" ).TagL( "a:srgbClr" ).Attr( "val", "0000FF" ).EndL().End();
+        xmlw.Tag( "a:folHlink" ).TagL( "a:srgbClr" ).Attr( "val", "800080" ).EndL().End();
+        xmlw.End( "a:clrScheme" );
+
+        const char * szAFont = "a:font";
+        const char * szScript = "script";
+        const char * szTypeface = "typeface";
+        xmlw.Tag( "a:fontScheme" ).Attr( "name", "Office" );
+        for( int i = 0; i < 2; i++ )
+        {
+            if( i == 0 ) xmlw.Tag( "a:majorFont" );
+            else xmlw.Tag( "a:minorFont" );
+
+            xmlw.TagL( "a:latin" ).Attr( szTypeface, "Cambria" ).EndL();
+            xmlw.TagL( "a:ea" ).Attr( szTypeface, "" ).EndL();
+            xmlw.TagL( "a:cs" ).Attr( szTypeface, "" ).EndL();
+
+            xmlw.TagL( szAFont ).Attr( szScript, "Arab" ).Attr( szTypeface, "Times New Roman" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Herb" ).Attr( szTypeface, "Times New Roman" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Thai" ).Attr( szTypeface, "Tahoma" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Ethi" ).Attr( szTypeface, "Nyala" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Beng" ).Attr( szTypeface, "Vrinda" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Gujr" ).Attr( szTypeface, "Shruti" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Khmr" ).Attr( szTypeface, "MoolBoran" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Knda" ).Attr( szTypeface, "Tunga" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Guru" ).Attr( szTypeface, "Raavi" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Cans" ).Attr( szTypeface, "Euphemia" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Cher" ).Attr( szTypeface, "Plantagenet Cherokee" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Yiii" ).Attr( szTypeface, "Microsoft Yi Baiti" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Tibt" ).Attr( szTypeface, "Microsoft Himalaya" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Thaa" ).Attr( szTypeface, "MV Boli" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Deva" ).Attr( szTypeface, "Mangal" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Telu" ).Attr( szTypeface, "Gautami" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Taml" ).Attr( szTypeface, "Latha" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Syrc" ).Attr( szTypeface, "Estrangelo Edessa" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Orya" ).Attr( szTypeface, "Kalinga" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Mlym" ).Attr( szTypeface, "Kartika" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Laoo" ).Attr( szTypeface, "DokChampa" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Sinh" ).Attr( szTypeface, "Iskoola Pota" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Mong" ).Attr( szTypeface, "Mongolian Baiti" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Viet" ).Attr( szTypeface, "Times New Roman" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Uigh" ).Attr( szTypeface, "Microsoft Uighur" ).EndL();
+            xmlw.TagL( szAFont ).Attr( szScript, "Geor" ).Attr( szTypeface, "Sylfaen" ).EndL();
+
+            xmlw.End(); //For "a:majorFont" and "a:minorFont"
+        }
+        xmlw.End( "a:fontScheme" );
+
+        xmlw.Tag( "a:fmtScheme" ).Attr( "name", "Office" );
+
+        xmlw.Tag( "a:fillStyleLst" );
+        xmlw.Tag( "a:solidFill" ).TagL( "a:schemeClr" ).Attr( "val", "phClr" ).EndL().End();
+        xmlw.Tag( "a:gradFill" ).Attr( "rotWithShape", 1 );
+        xmlw.Tag( "a:gsLst" );
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 0 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:tint" ).Attr( "val", 50000 ).EndL().TagL( "a:satMod" ).Attr( "val", 300000 ).EndL().End().End();
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 35000 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:tint" ).Attr( "val", 37000 ).EndL().TagL( "a:satMod" ).Attr( "val", 300000 ).EndL().End().End();
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 100000 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:tint" ).Attr( "val", 15000 ).EndL().TagL( "a:satMod" ).Attr( "val", 350000 ).EndL().End().End();
+        xmlw.End( "a:gsLst" );
+        xmlw.TagL( "a:lin" ).Attr( "ang", 16200000 ).Attr( "scaled", 1 ).EndL();
+        xmlw.End( "a:gradFill" );
+        xmlw.Tag( "a:gradFill" ).Attr( "rotWithShape", 1 );
+        xmlw.Tag( "a:gsLst" );
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 0 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:shade" ).Attr( "val", 51000 ).EndL().TagL( "a:satMod" ).Attr( "val", 130000 ).EndL().End().End();
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 80000 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:shade" ).Attr( "val", 93000 ).EndL().TagL( "a:satMod" ).Attr( "val", 130000 ).EndL().End().End();
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 100000 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:shade" ).Attr( "val", 94000 ).EndL().TagL( "a:satMod" ).Attr( "val", 135000 ).EndL().End().End();
+        xmlw.End( "a:gsLst" );
+        xmlw.TagL( "a:lin" ).Attr( "ang", 16200000 ).Attr( "scaled", 0 ).EndL();
+        xmlw.End( "a:gradFill" );
+        xmlw.End( "a:fillStyleLst" );
+
+        xmlw.Tag( "a:lnStyleLst" );
+        xmlw.Tag( "a:ln" ).Attr( "w", 9525 ).Attr( "cap", "flat" ).Attr( "cmpd", "sng" ).Attr( "algn", "ctr" );
+        /**/xmlw.Tag( "a:solidFill" ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:shade" ).Attr( "val", 95000 ).EndL().TagL( "a:satMod" ).Attr( "val", 105000 ).EndL().End().End();
+        /**/xmlw.TagL( "a:prstDash" ).Attr( "val", "solid" ).EndL();
+        xmlw.End( "a:ln" );
+        xmlw.Tag( "a:ln" ).Attr( "w", 25400 ).Attr( "cap", "flat" ).Attr( "cmpd", "sng" ).Attr( "algn", "ctr" );
+        /**/xmlw.Tag( "a:solidFill" ).TagL( "a:schemeClr" ).Attr( "val", "phClr" ).EndL().End();
+        /**/xmlw.TagL( "a:prstDash" ).Attr( "val", "solid" ).EndL();
+        xmlw.End( "a:ln" );
+        xmlw.Tag( "a:ln" ).Attr( "w", 38100 ).Attr( "cap", "flat" ).Attr( "cmpd", "sng" ).Attr( "algn", "ctr" );
+        /**/xmlw.Tag( "a:solidFill" ).TagL( "a:schemeClr" ).Attr( "val", "phClr" ).EndL().End();
+        /**/xmlw.TagL( "a:prstDash" ).Attr( "val", "solid" ).EndL();
+        xmlw.End( "a:ln" );
+        xmlw.End( "a:lnStyleLst" );
+
+        xmlw.Tag( "a:effectStyleLst" );
+        xmlw.Tag( "a:effectStyle" ).Tag( "a:effectLst" );
+        /**/xmlw.Tag( "a:outerShdw" ).Attr( "blurRad", 40000 ).Attr( "dist", 20000 ).Attr( "dir", 5400000 ).Attr( "rotWithShape", 0 );
+        /**/xmlw.Tag( "a:srgbClr" ).Attr( "val", "000000" ).TagL( "a:alpha" ).Attr( "val", 38000 ).EndL().End().End();
+        xmlw.End( "a:effectLst" ).End( "a:effectStyle" );
+        xmlw.Tag( "a:effectStyle" ).Tag( "a:effectLst" );
+        /**/xmlw.Tag( "a:outerShdw" ).Attr( "blurRad", 40000 ).Attr( "dist", 23000 ).Attr( "dir", 5400000 ).Attr( "rotWithShape", 0 );
+        /**/xmlw.Tag( "a:srgbClr" ).Attr( "val", "000000" ).TagL( "a:alpha" ).Attr( "val", 35000 ).EndL().End().End();
+        xmlw.End( "a:effectLst" ).End( "a:effectStyle" );
+        xmlw.Tag( "a:effectStyle" ).Tag( "a:effectLst" );
+        /**/xmlw.Tag( "a:outerShdw" ).Attr( "blurRad", 40000 ).Attr( "dist", 23000 ).Attr( "dir", 5400000 ).Attr( "rotWithShape", 0 );
+        /**/xmlw.Tag( "a:srgbClr" ).Attr( "val", "000000" ).TagL( "a:alpha" ).Attr( "val", 35000 ).EndL().End().End();
+        xmlw.End( "a:effectLst" );
+        xmlw.Tag( "a:scene3d" );
+        /**/xmlw.Tag( "a:camera" ).Attr( "prst", "orthographicFront" );
+        /**/xmlw.TagL( "a:rot" ).Attr( "lat", 0 ).Attr( "lon", 0 ).Attr( "rev", 0 ).EndL().End();
+        /**/xmlw.Tag( "a:lightRig" ).Attr( "rig", "threePt" ).Attr( "dir", "t" );
+        /**/xmlw.TagL( "a:rot" ).Attr( "lat", 0 ).Attr( "lon", 0 ).Attr( "rev", 1200000 ).EndL().End();
+        xmlw.End( "a:scene3d" );
+        xmlw.Tag( "a:sp3d" ).Tag( "a:bevelT" ).Attr( "w", 63500 ).Attr( "h", 25400 ).End().End();
+        xmlw.End( "a:effectStyle" );
+        xmlw.End( "a:effectStyleLst" );
+
+        xmlw.Tag( "a:bgFillStyleLst" );
+        xmlw.Tag( "a:solidFill" ).TagL( "a:schemeClr" ).Attr( "val", "phClr" ).EndL().End();
+        xmlw.Tag( "a:gradFill" ).Attr( "rotWithShape", 1 ).Tag( "a:gsLst" );
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 0 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:tint" ).Attr( "val", 40000 ).EndL().TagL( "a:satMod" ).Attr( "val", 350000 ).EndL().End().End();
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 40000 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:tint" ).Attr( "val", 45000 ).EndL().TagL( "a:shade" ).Attr( "val", 99000 ).EndL();
+        /**/xmlw.TagL( "a:satMod" ).Attr( "val", 350000 ).EndL().End().End();
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 100000 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:shade" ).Attr( "val", 20000 ).EndL().TagL( "a:satMod" ).Attr( "val", 255000 ).EndL().End().End();
+        xmlw.End( "a:gsLst" );
+        xmlw.Tag( "a:path" ).Attr( "path", "circle" );
+        /**/xmlw.TagL( "a:fillToRect" ).Attr( "l", 50000 ).Attr( "t", -80000 ).Attr( "r", 50000 ).Attr( "b", 180000 ).EndL();
+        xmlw.End( "a:path" ).End( "a:gradFill" );
+        xmlw.Tag( "a:gradFill" ).Attr( "rotWithShape", 1 ).Tag( "a:gsLst" );
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 0 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:tint" ).Attr( "val", 80000 ).EndL().TagL( "a:satMod" ).Attr( "val", 300000 ).EndL().End().End();
+        /**/xmlw.Tag( "a:gs" ).Attr( "pos", 100000 ).Tag( "a:schemeClr" ).Attr( "val", "phClr" );
+        /**/xmlw.TagL( "a:shade" ).Attr( "val", 30000 ).EndL().TagL( "a:satMod" ).Attr( "val", 200000 ).EndL().End().End();
+        xmlw.End( "a:gsLst" );
+        xmlw.Tag( "a:path" ).Attr( "path", "circle" );
+        /**/xmlw.TagL( "a:fillToRect" ).Attr( "l", 50000 ).Attr( "t", 50000 ).Attr( "r", 50000 ).Attr( "b", 50000 ).EndL();
+        xmlw.End( "a:path" ).End( "a:gradFill" );
+
+        xmlw.End( "a:bgFillStyleLst" );
+
+        xmlw.End( "a:fmtScheme" );
+
+        xmlw.End( "a:themeElements" );
+        xmlw.TagL( "a:objectDefaults" ).EndL();
+        xmlw.TagL( "a:extraClrSchemeLst" ).EndL();
+        xmlw.End( "a:theme" );
+        // zip/xl/theme/theme1.xml -]
+        return true;
     }
 
-    xml_stream
-    << endtag()
-    << endtag()
-    << tag(_T("Company")) << chardata() << _T("") << endtag()
-    << tag(_T("LinksUpToDate")) << chardata() << _T("false") << endtag()
-    << tag(_T("SharedDoc")) << chardata() << _T("false") << endtag()
-    << tag(_T("HyperlinksChanged")) << chardata() << _T("false") << endtag()
-    << tag(_T("AppVersion")) << chardata() << 14.03/*Microsoft Excel 2010*/ << endtag();
-    // zip/docProps/app.xml -]
+    // ****************************************************************************
+    /// @brief  ...
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::SaveStyles()
+    {
+        // [- zip/xl/styles.xml
+        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/styles.xml" ) ) );
+        xmlw.Tag( "styleSheet" ).Attr( "xmlns", ns_book ).Attr( "xmlns:mc", ns_mc ).Attr( "mc:Ignorable", "x14ac" ).Attr( "xmlns:x14ac", ns_x14ac );
 
-    return true;
-}
+        AddNumberFormats( xmlw );
+        AddFonts( xmlw );
+        AddFills( xmlw );
+        AddBorders( xmlw );
 
-// ****************************************************************************
-/// @brief  ...
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::SaveTheme() const
-{
-    // [- zip/xl/theme/theme1.xml
-    TCHAR szPathToFile[MAX_PATH] = { 0 };
-    _stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), m_contentFiles[7].c_str());
-    MakeDirectory(szPathToFile);
-    char szPath[MAX_PATH] = { 0 };
-#ifdef UNICODE
-        int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-        if (res == -1) return false;
-#else
-		_stprintf(szPath, _T("%s"), szPathToFile);
-#endif
-        _tofstream f(szPath);
-    xmlw::XmlStream xml_stream(f);
+        xmlw.Tag( "cellStyleXfs" ).Attr( "count", 1 );
+        xmlw.TagL( "xf" ).Attr( "numFmtId", 0 ).Attr( "fontId", 0 ).Attr( "fillId", 0 ).Attr( "borderId", 0 ).EndL();
+        xmlw.End( "cellStyleXfs" );
 
-    const TCHAR *szAFont = _T("a:font");
-    const TCHAR *szScript = _T("script");
-    const TCHAR *szTypeface = _T("typeface");
+        xmlw.Tag( "cellXfs" );
+        const std::vector<std::vector<size_t> > & styleIndexes = m_styleList.GetIndexes();
+        const std::vector< std::pair<std::pair<EAlignHoriz, EAlignVert>, bool> > & styleAligns = m_styleList.GetPositions();
+        assert( styleIndexes.size() == styleAligns.size() );
+        for( size_t i = 0; i < styleIndexes.size(); i++ )
+        {
+            std::vector<size_t> index = styleIndexes[ i ];
+            std::pair<std::pair<EAlignHoriz, EAlignVert>, bool> align = styleAligns[ i ];
 
-    xml_stream << prolog()
-    << tag(_T("a:theme")) << attr(_T("xmlns:a")) << ns_a << attr(_T("name")) << _T("Office Theme")
-        << tag(_T("a:themeElements"))
-            << tag(_T("a:clrScheme")) << attr(_T("name")) << _T("Office")
-                << tag(_T("a:dk1")) << tag(_T("a:sysClr")) << attr(_T("val")) << _T("windowText") << attr(_T("lastClr")) << _T("000000") << endtag() << endtag()
-                << tag(_T("a:lt1")) << tag(_T("a:sysClr")) << attr(_T("val")) << _T("window") << attr(_T("lastClr")) << _T("FFFFFF") << endtag() << endtag()
-                << tag(_T("a:dk2")) << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("1F497D") << endtag() << endtag()
-                << tag(_T("a:lt2")) << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("EEECE1") << endtag() << endtag()
-                << tag(_T("a:accent1")) << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("4F81BD") << endtag() << endtag()
-                << tag(_T("a:accent2")) << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("C0504D") << endtag() << endtag()
-                << tag(_T("a:accent3")) << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("9BBB59") << endtag() << endtag()
-                << tag(_T("a:accent4")) << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("8064A2") << endtag() << endtag()
-                << tag(_T("a:accent5")) << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("4BACC6") << endtag() << endtag()
-                << tag(_T("a:accent6")) << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("F79646") << endtag() << endtag()
-                << tag(_T("a:hlink")) << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("0000FF") << endtag() << endtag()
-                << tag(_T("a:folHlink")) << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("800080") << endtag() << endtag()
-            << endtag()
+            xmlw.Tag( "xf" ).Attr( "numFmtId", index[ StyleList::STYLE_LINK_NUM_FORMAT ] );
+            xmlw.Attr( "fontId", index[ StyleList::STYLE_LINK_FONT ] );
+            xmlw.Attr( "fillId", index[ StyleList::STYLE_LINK_FILL ] );
+            xmlw.Attr( "borderId", index[ StyleList::STYLE_LINK_BORDER ] );
 
-            << tag(_T("a:fontScheme")) << attr(_T("name")) << _T("Office")
-                << tag(_T("a:majorFont"))
-                    << tag(_T("a:latin")) << attr(szTypeface) << _T("Cambria") << endtag()
-                    << tag(_T("a:ea")) << attr(szTypeface) << _T("") << endtag()
-                    << tag(_T("a:cs")) << attr(szTypeface) << _T("") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Arab") << attr(szTypeface) << _T("Times New Roman") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Herb") << attr(szTypeface) << _T("Times New Roman") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Thai") << attr(szTypeface) << _T("Tahoma") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Ethi") << attr(szTypeface) << _T("Nyala") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Beng") << attr(szTypeface) << _T("Vrinda") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Gujr") << attr(szTypeface) << _T("Shruti") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Khmr") << attr(szTypeface) << _T("MoolBoran") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Knda") << attr(szTypeface) << _T("Tunga") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Guru") << attr(szTypeface) << _T("Raavi") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Cans") << attr(szTypeface) << _T("Euphemia") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Cher") << attr(szTypeface) << _T("Plantagenet Cherokee") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Yiii") << attr(szTypeface) << _T("Microsoft Yi Baiti") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Tibt") << attr(szTypeface) << _T("Microsoft Himalaya") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Thaa") << attr(szTypeface) << _T("MV Boli") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Deva") << attr(szTypeface) << _T("Mangal") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Telu") << attr(szTypeface) << _T("Gautami") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Taml") << attr(szTypeface) << _T("Latha") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Syrc") << attr(szTypeface) << _T("Estrangelo Edessa") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Orya") << attr(szTypeface) << _T("Kalinga") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Mlym") << attr(szTypeface) << _T("Kartika") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Laoo") << attr(szTypeface) << _T("DokChampa") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Sinh") << attr(szTypeface) << _T("Iskoola Pota") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Mong") << attr(szTypeface) << _T("Mongolian Baiti") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Viet") << attr(szTypeface) << _T("Times New Roman") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Uigh") << attr(szTypeface) << _T("Microsoft Uighur") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Geor") << attr(szTypeface) << _T("Sylfaen") << endtag()
-                << endtag()
-                << tag(_T("a:minorFont"))
-                    << tag(_T("a:latin")) << attr(szTypeface) << _T("Cambria") << endtag()
-                    << tag(_T("a:ea")) << attr(szTypeface) << _T("") << endtag()
-                    << tag(_T("a:cs")) << attr(szTypeface) << _T("") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Arab") << attr(szTypeface) << _T("Times New Roman") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Herb") << attr(szTypeface) << _T("Times New Roman") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Thai") << attr(szTypeface) << _T("Tahoma") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Ethi") << attr(szTypeface) << _T("Nyala") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Beng") << attr(szTypeface) << _T("Vrinda") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Gujr") << attr(szTypeface) << _T("Shruti") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Khmr") << attr(szTypeface) << _T("MoolBoran") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Knda") << attr(szTypeface) << _T("Tunga") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Guru") << attr(szTypeface) << _T("Raavi") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Cans") << attr(szTypeface) << _T("Euphemia") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Cher") << attr(szTypeface) << _T("Plantagenet Cherokee") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Yiii") << attr(szTypeface) << _T("Microsoft Yi Baiti") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Tibt") << attr(szTypeface) << _T("Microsoft Himalaya") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Thaa") << attr(szTypeface) << _T("MV Boli") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Deva") << attr(szTypeface) << _T("Mangal") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Telu") << attr(szTypeface) << _T("Gautami") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Taml") << attr(szTypeface) << _T("Latha") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Syrc") << attr(szTypeface) << _T("Estrangelo Edessa") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Orya") << attr(szTypeface) << _T("Kalinga") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Mlym") << attr(szTypeface) << _T("Kartika") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Laoo") << attr(szTypeface) << _T("DokChampa") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Sinh") << attr(szTypeface) << _T("Iskoola Pota") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Mong") << attr(szTypeface) << _T("Mongolian Baiti") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Viet") << attr(szTypeface) << _T("Times New Roman") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Uigh") << attr(szTypeface) << _T("Microsoft Uighur") << endtag()
-                    << tag(szAFont) << attr(szScript) << _T("Geor") << attr(szTypeface) << _T("Sylfaen") << endtag()
-                << endtag()
-            << endtag()
+            if( index[StyleList::STYLE_LINK_FONT] != 0 )        xmlw.Attr( "applyFont", 1 );
+            if( index[StyleList::STYLE_LINK_FILL] != 0 )        xmlw.Attr( "applyFill", 1 );
+            if( index[StyleList::STYLE_LINK_BORDER] != 0 )      xmlw.Attr( "applyBorder", 1 );
+            if( index[StyleList::STYLE_LINK_NUM_FORMAT ] != 0 ) xmlw.Attr( "applyNumberFormat", 1 );
 
-            << tag(_T("a:fmtScheme")) << attr(_T("name")) << _T("Office")
-                << tag(_T("a:fillStyleLst"))
-                    << tag(_T("a:solidFill")) << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr") << endtag() << endtag()
-                    << tag(_T("a:gradFill")) << attr(_T("rotWithShape")) << 1
-                        << tag(_T("a:gsLst"))
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 0
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:tint")) << attr(_T("val")) << 50000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 300000 << endtag()
-                                << endtag()
-                            << endtag()
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 35000
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:tint")) << attr(_T("val")) << 37000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 300000 << endtag()
-                                << endtag()
-                            << endtag()
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 100000
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:tint")) << attr(_T("val")) << 15000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 350000 << endtag()
-                                << endtag()
-                            << endtag()
-                        << endtag()
-                        << tag(_T("a:lin")) << attr(_T("a:ang")) << 16200000 << attr(_T("scaled")) << 1 << endtag()
-                    << endtag()
+            if( ( align.first.first != ALIGN_H_NONE ) || ( align.first.second != ALIGN_V_NONE ) || align.second )
+            {
+                xmlw.TagL( "alignment" );
+                switch( align.first.first )
+                {
+                    case ALIGN_H_LEFT   :	xmlw.Attr( "horizontal", "left" );      break;
+                    case ALIGN_H_CENTER :   xmlw.Attr( "horizontal", "center" );    break;
+                    case ALIGN_H_RIGHT  :	xmlw.Attr( "horizontal", "right" );     break;
+                    case ALIGN_H_NONE   :
+                        /*default:*/ 			break;
+                }
+                switch( align.first.second )
+                {
+                    case ALIGN_V_BOTTOM :	xmlw.Attr( "vertical", "bottom" );  break;
+                    case ALIGN_V_CENTER :	xmlw.Attr( "vertical", "center" );  break;
+                    case ALIGN_V_TOP    :	xmlw.Attr( "vertical", "top" );    break;
+                    case ALIGN_V_NONE   :
+                        /*default:*/ 				break;
+                }
+                if( align.second ) xmlw.Attr( "wrapText", 1 );
+                xmlw.EndL();
+            }
+            xmlw.End( "xf" );
+        }
+        xmlw.End( "cellXfs" );
 
-                    << tag(_T("a:gradFill")) << attr(_T("rotWithShape")) << 1
-                        << tag(_T("a:gsLst"))
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 0
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:tint")) << attr(_T("val")) << 51000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 130000 << endtag()
-                                << endtag()
-                            << endtag()
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 80000
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:tint")) << attr(_T("val")) << 93000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 130000 << endtag()
-                                << endtag()
-                            << endtag()
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 100000
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:tint")) << attr(_T("val")) << 94000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 135000 << endtag()
-                                << endtag()
-                            << endtag()
-                        << endtag()
-                        << tag(_T("a:lin")) << attr(_T("a:ang")) << 16200000 << attr(_T("scaled")) << 0 << endtag()
-                    << endtag()
-                << endtag()
+        xmlw.Tag( "cellStyles" ).Attr( "count", 1 );
+        xmlw.TagL( "cellStyle" ).Attr( "name", "Normal" ).Attr( "xfId", 0 ).Attr( "builtinId", 0 ).EndL();
+        xmlw.End( "cellStyles" );
 
-                << tag(_T("a:lnStyleLst"))
-                    << tag(_T("a:ln")) << attr(_T("w")) << 9525 << attr(_T("cap")) << _T("flat") << attr(_T("cmpd")) << _T("sng") << attr(_T("algn")) << _T("ctr")
-                        << tag(_T("a:solidFill"))
-                            << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                << tag(_T("a:shade")) << attr(_T("val")) << 95000 << endtag()
-                                << tag(_T("a:satMod")) << attr(_T("val")) << 105000 << endtag()
-                            << endtag()
-                        << endtag()
-                        << tag(_T("a:prstDash")) << attr(_T("val")) << _T("solid") << endtag()
-                    << endtag()
-                    << tag(_T("a:ln")) << attr(_T("w")) << 25400 << attr(_T("cap")) << _T("flat") << attr(_T("cmpd")) << _T("sng") << attr(_T("algn")) << _T("ctr")
-                        << tag(_T("a:solidFill")) << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr") << endtag() << endtag()
-                        << tag(_T("a:prstDash")) << attr(_T("val")) << _T("solid") << endtag()
-                    << endtag()
-                    << tag(_T("a:ln")) << attr(_T("w")) << 38100 << attr(_T("cap")) << _T("flat") << attr(_T("cmpd")) << _T("sng") << attr(_T("algn")) << _T("ctr")
-                        << tag(_T("a:solidFill")) << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr") << endtag() << endtag()
-                        << tag(_T("a:prstDash")) << attr(_T("val")) << _T("solid") << endtag()
-                    << endtag()
-                << endtag()
+        xmlw.TagL( "dxfs" ).Attr( "count", 0 ).EndL();
+        xmlw.TagL( "tableStyles" ).Attr( "count", 0 ).Attr( "defaultTableStyle", "TableStyleMedium2" );
+        xmlw.Attr( "defaultPivotStyle", "PivotStyleLight16" ).EndL();
 
-                << tag(_T("a:effectStyleLst"))
-                    << tag(_T("a:effectStyle"))
-                        << tag(_T("a:effectLst"))
-                            << tag(_T("a:outerShdw")) << attr(_T("blurRad")) << 40000 << attr(_T("dist")) << 20000 << attr(_T("dir")) << 5400000 << attr(_T("rotWithShape")) << 0
-                                << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("000000") << tag(_T("a:alpha")) << attr(_T("val")) << 38000 << endtag() << endtag()
-                            << endtag()
-                            << tag(_T("a:outerShdw")) << attr(_T("blurRad")) << 40000 << attr(_T("dist")) << 23000 << attr(_T("dir")) << 5400000 << attr(_T("rotWithShape")) << 0
-                                << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("000000") << tag(_T("a:alpha")) << attr(_T("val")) << 35000 << endtag() << endtag()
-                            << endtag()
-                            << tag(_T("a:outerShdw")) << attr(_T("blurRad")) << 40000 << attr(_T("dist")) << 23000 << attr(_T("dir")) << 5400000 << attr(_T("rotWithShape")) << 0
-                                << tag(_T("a:srgbClr")) << attr(_T("val")) << _T("000000") << tag(_T("a:alpha")) << attr(_T("val")) << 35000 << endtag() << endtag()
-                            << endtag()
-                        << endtag()
-                        << tag(_T("a:scene3d"))
-                            << tag(_T("a:camera")) << attr(_T("prst")) << _T("orthographicFront")
-                                << tag(_T("a:rot")) << attr(_T("lat")) << 0 << attr(_T("lon")) << 0 << attr(_T("rev")) << 0 << endtag()
-                            << endtag()
-                            << tag(_T("a:lightRig")) << attr(_T("rig")) << _T("threePt") << attr(_T("dir")) << _T("t")
-                                << tag(_T("a:rot")) << attr(_T("lat")) << 0 << attr(_T("lon")) << 0 << attr(_T("rev")) << 1200000 << endtag()
-                            << endtag()
-                        << endtag()
-                        << tag(_T("a:sp3d")) << tag(_T("bevelT")) << attr(_T("w")) << 63500 << attr(_T("h")) << 25400 << endtag() << endtag()
-                    << endtag()
-                << endtag()
+        xmlw.Tag( "extLst" );
+        xmlw.Tag( "ext" ).Attr( "uri", "{EB79DEF2-80B8-43e5-95BD-54CBDDF9020C}" ).Attr( "xmlns:x14", ns_x14 );
+        xmlw.TagL( "x14:slicerStyles" ).Attr( "defaultSlicerStyle", "SlicerStyleLight1" ).EndL();
+        xmlw.End( "ext" );
+        xmlw.End( "extLst" );
 
-                << tag(_T("a:bgFillStyleLst"))
-                    << tag(_T("a:solidFill")) << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr") << endtag() << endtag()
-                << endtag()
-
-                << tag(_T("a:fillStyleLst"))
-                    << tag(_T("a:gradFill")) << attr(_T("rotWithShape")) << 1
-                        << tag(_T("a:gsLst"))
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 0
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:tint")) << attr(_T("val")) << 40000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 350000 << endtag()
-                                << endtag()
-                            << endtag()
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 40000
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:tint")) << attr(_T("val")) << 45000 << endtag()
-                                    << tag(_T("a:shade")) << attr(_T("val")) << 99000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 350000 << endtag()
-                                << endtag()
-                            << endtag()
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 100000
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:shade")) << attr(_T("val")) << 20000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 255000 << endtag()
-                                << endtag()
-                            << endtag()
-                        << endtag()
-                        << tag(_T("a:path")) << attr(_T("path")) << _T("circle")
-                            << tag(_T("a:fillToRect")) << attr(_T("l")) << 50000 << attr(_T("t")) << -80000 << attr(_T("r")) << 50000 << attr(_T("b")) << 180000 << endtag()
-                        << endtag()
-                    << endtag()
-                    << tag(_T("a:gradFill")) << attr(_T("rotWithShape")) << 1
-                        << tag(_T("a:gsLst"))
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 0
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:tint")) << attr(_T("val")) << 80000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 300000 << endtag()
-                                << endtag()
-                            << endtag()
-                            << tag(_T("a:gs")) << attr(_T("pos")) << 100000
-                                << tag(_T("a:schemeClr")) << attr(_T("val")) << _T("phClr")
-                                    << tag(_T("a:shade")) << attr(_T("val")) << 30000 << endtag()
-                                    << tag(_T("a:satMod")) << attr(_T("val")) << 200000 << endtag()
-                                << endtag()
-                            << endtag()
-                        << endtag()
-                        << tag(_T("a:path")) << attr(_T("path")) << _T("circle")
-                            << tag(_T("a:fillToRect")) << attr(_T("l")) << 50000 << attr(_T("t")) << 50000 << attr(_T("r")) << 50000 << attr(_T("b")) << 50000 << endtag()
-                        << endtag()
-                    << endtag()
-                << endtag()
-            << endtag()
-        << endtag()
-        << tag(_T("a:objectDefaults")) << endtag()
-        << tag(_T("a:extraClrShemeLst")) << endtag();
-    // zip/xl/theme/theme1.xml -]
-
-    return true;
-}
-
-// ****************************************************************************
-/// @brief  ...
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::SaveStyles() const
-{
-    // [- zip/xl/styles.xml
-    TCHAR szPathToFile[MAX_PATH] = { 0 };
-    _stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), m_contentFiles[5].c_str());
-    MakeDirectory(szPathToFile);
-    char szPath[MAX_PATH] = { 0 };
-#ifdef UNICODE
-        int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-        if (res == -1) return false;
-#else
-		_stprintf(szPath, _T("%s"), szPathToFile);
-#endif
-        _tofstream f(szPath);
-    XmlStream xml_stream(f);
-
-    xml_stream << prolog()
-    << tag(_T("styleSheet"))    << attr(_T("xmlns")) << ns_book << attr(_T("xmlns:mc")) << ns_mc
-								<< attr(_T("mc:Ignorable")) << _T("x14ac") << attr(_T("xmlns:x14ac")) << ns_x14ac;
-
-        AddNumberFormats(xml_stream);
-        AddFonts(xml_stream);
-        AddFills(xml_stream);
-        AddBorders(xml_stream);
-
-    xml_stream
-        << tag(_T("cellStyleXfs")) << attr(_T("count")) << 1
-            << tag(_T("xf")) << attr(_T("numFmtId")) << 0 << attr(_T("fontId")) << 0 << attr(_T("fillId")) << 0 << attr(_T("borderId")) << 0 << endtag()
-        << endtag()
-
-        << tag(_T("cellXfs"));
-
-    vector<vector<size_t> > styleIndexes = m_styleList.GetIndexes();
-    vector< pair<pair<EAlignHoriz, EAlignVert>, bool> > styleAligns = m_styleList.GetPositions();
-    for (size_t i = 0; i < styleIndexes.size(); i++) {
-        vector<size_t> index = styleIndexes[i];
-        pair<pair<EAlignHoriz, EAlignVert>, bool> align = styleAligns[i];
-
-        xml_stream
-            << tag(_T("xf")) << attr(_T("numFmtId")) << index[StyleList::STYLE_LINK_NUM_FORMAT]
-							<< attr(_T("fontId")) << index[StyleList::STYLE_LINK_FONT]
-							<< attr(_T("fillId")) << index[StyleList::STYLE_LINK_FILL]
-							<< attr(_T("borderId")) << index[StyleList::STYLE_LINK_BORDER];
-
-        if (index[StyleList::STYLE_LINK_FONT] != 0)
-            xml_stream   << attr(_T("applyFont")) << 1;
-        if (index[StyleList::STYLE_LINK_FILL] != 0)
-            xml_stream   << attr(_T("applyFill")) << 1;
-        if (index[StyleList::STYLE_LINK_BORDER] != 0)
-            xml_stream   << attr(_T("applyBorder")) << 1;
-		if (index[StyleList::STYLE_LINK_NUM_FORMAT] != 0)
-			xml_stream   << attr(_T("applyNumberFormat")) << 1;
-
-		if (align.first.first != ALIGN_H_NONE || align.first.second != ALIGN_V_NONE || align.second != false) {
-			xml_stream
-				<< tag(_T("alignment"));
-
-			switch (align.first.first) {
-			case ALIGN_H_LEFT:	xml_stream << attr(_T("horizontal")) << _T("left"); break;
-			case ALIGN_H_CENTER:xml_stream << attr(_T("horizontal")) << _T("center"); break;
-			case ALIGN_H_RIGHT:	xml_stream << attr(_T("horizontal")) << _T("right"); break;
-			case ALIGN_H_NONE:
-			default: 			break;
-			}
-
-			switch (align.first.second) {
-			case ALIGN_V_BOTTOM:	xml_stream << attr(_T("vertical")) << _T("bottom"); break;
-			case ALIGN_V_CENTER:	xml_stream << attr(_T("vertical")) << _T("center"); break;
-			case ALIGN_V_TOP:		xml_stream << attr(_T("vertical")) << _T("top"); break;
-			case ALIGN_V_NONE:
-			default: 				break;
-			}
-
-			if (align.second == true) {
-				xml_stream << attr(_T("wrapText")) << 1;
-			}
-
-			xml_stream
-				<< endtag();
-		}
-
-        xml_stream
-            << endtag();
+        xmlw.End( "styleSheet" );
+        // zip/xl/styles.xml -]
+        return true;
     }
 
-    xml_stream
-        << endtag()
+    // ****************************************************************************
+    /// @brief  Appends number format section into styles file
+    /// @param  stream reference to xml stream
+    /// @return no
+    // ****************************************************************************
+    void CWorkbook::AddNumberFormats( XMLWriter & xmlw ) const
+    {
+        const std::vector<NumFormat> & nums = m_styleList.GetNumFormats();
 
-        << tag(_T("cellStyles")) << attr(_T("count")) << 1
-            << tag(_T("cellStyle")) << attr(_T("name")) << _T("Normal") << attr(_T("xfId")) << 0 << attr(_T("builtinId")) << 0 << endtag()
-        << endtag()
+        size_t built_in_formats = 0;
+        for( std::vector<NumFormat>::const_iterator it = nums.begin(); it != nums.end(); it++ )
+            if( it->id < StyleList::BUILT_IN_STYLES_NUMBER )
+                built_in_formats++;
 
-        << tag(_T("dxfs")) << attr(_T("count")) << 0 << endtag()
-        << tag(_T("tableStyles")) << attr(_T("count")) << 0 << attr(_T("defaultTableStyle")) << _T("TableStyleMedium2") << attr(_T("defaultPivotStyle")) << _T("PivotStyleLight16") << endtag()
-        << tag(_T("extLst"))
-            << tag(_T("ext"))   << attr(_T("uri")) << _T("{EB79DEF2-80B8-43e5-95BD-54CBDDF9020C}")
-								<< attr(_T("xmlns:x14")) << ns_x14
-                << tag(_T("x14:slicerStyles")) << attr(_T("defaultSlicerStyle")) << _T("SlicerStyleLight1") << endtag()
-            << endtag();
-    // zip/xl/styles.xml -]
+        if( nums.size() - built_in_formats == 0 ) return;
 
-    return true;
-}
-
-// ****************************************************************************
-/// @brief  Appends number format section into styles file
-/// @param  stream reference to xml stream
-/// @return no
-// ****************************************************************************
-void CWorkbook::AddNumberFormats(xmlw::XmlStream& stream) const
-{
-	vector<NumFormat> nums = m_styleList.GetNumFormats();
-
-	size_t built_in_formats = 0;
-	for (size_t i = 0; i < nums.size(); i++)
-		if (nums[i].id < StyleList::BUILT_IN_STYLES_NUMBER)
-			built_in_formats++;
-
-	if (nums.size() - built_in_formats == 0) return;
-
-    stream
-    << tag(_T("numFmts")) << attr(_T("count")) << nums.size() - built_in_formats;
-
-    for (size_t i = 0; i < nums.size(); i++) {
-    	if (nums[i].id < StyleList::BUILT_IN_STYLES_NUMBER)
-			continue;
-
-        stream
-        << tag(_T("numFmt"))
-			<< attr(_T("numFmtId")) << nums[i].id
-			<< attr(_T("formatCode")) << CWorkbook::GetFormatCodeString(nums[i])
-        << endtag();
+        xmlw.Tag( "numFmts" ).Attr( "count", nums.size() - built_in_formats );
+        for( std::vector<NumFormat>::const_iterator it = nums.begin(); it != nums.end(); it++ )
+        {
+            if( it->id < StyleList::BUILT_IN_STYLES_NUMBER ) continue;
+            xmlw.Tag( "numFmt" ).Attr( "numFmtId", it->id ).Attr( "formatCode", GetFormatCodeString( * it ) ).End();
+        }
+        xmlw.End( "numFmts" );
     }
 
-	stream
-    << endtag();
-}
+    // ****************************************************************************
+    /// @brief  Converts numeric format object into its string representation
+    /// @param  fmt reference to format to be converted
+    /// @return String format code
+    // ****************************************************************************
+    std::string CWorkbook::GetFormatCodeString( const NumFormat & fmt )
+    {
+        if( fmt.formatString != "" ) return fmt.formatString;
 
-// ****************************************************************************
-/// @brief  Converts numeric format object into its string representation
-/// @param  fmt reference to format to be converted
-/// @return String format code
-// ****************************************************************************
-_tstring CWorkbook::GetFormatCodeString(const NumFormat &fmt)
-{
-	if (fmt.formatString != _T("")) return fmt.formatString;
+        bool addNegative = false;
+        bool addZero = false;
 
-	bool addNegative = false;
-	bool addZero = false;
-
-	if (fmt.positiveColor != NUMSTYLE_COLOR_DEFAULT) {
-		addNegative = addZero = true;
-	}
-
-	if (fmt.negativeColor != NUMSTYLE_COLOR_DEFAULT) {
-		addNegative = true;
-	}
-
-	if (fmt.zeroColor != NUMSTYLE_COLOR_DEFAULT) {
-		addZero = true;
-	}
-
-	_tstring thousandPrefix;
-	if (fmt.showThousandsSeparator) {
-		thousandPrefix = _T("#,##");
-	}
-
-	locale loc("");
-	string char_currency = use_facet<moneypunct<char> >(loc).curr_symbol();
-	TCHAR szCurrency[10] = { 0 };
-#ifdef UNICODE
-	int32_t res = wcstombs(szCurrency, char_currency.c_str(), sizeof(szCurrency));
-	if (res == -1) return _T("");
-#else
-	_stprintf(szCurrency, _T("%s"), char_currency.c_str());
-#endif
-	_tstring currency = _tstring(_T("&quot;")) + szCurrency + _T("&quot;");
-
-	_tstring resCode;
-	_tstring affix;
-	_tstring digits = _T("0");
-	if (fmt.numberOfDigitsAfterPoint != 0) {
-		digits.append(_T("."));
-		digits.append(fmt.numberOfDigitsAfterPoint, _T('0'));
-	}
-
-	switch (fmt.numberStyle) {
-		case NUMSTYLE_EXPONENTIAL:
-			affix = _T("E+00");
-			break;
-		case NUMSTYLE_PERCENTAGE:
-			affix = _T("%");
-			break;
-		case NUMSTYLE_FINANCIAL:
-			//_-* #,##0.00"$"_-;\-* #,##0.00"$"_-;_-* "-"??"$"_-;_-@_-
-
-			resCode = 	GetFormatCodeColor(fmt.positiveColor) + _T("_-* ") + thousandPrefix + digits + currency + _T("_-;") +
-						GetFormatCodeColor(fmt.negativeColor) + _T("\\-* ") + thousandPrefix + digits + currency + _T("_-;") +
-						_T("_-* &quot;-&quot;??") + currency + _T("_-;_-@_-");
-			break;
-		case NUMSTYLE_MONEY:
-			affix = currency;
-			break;
-		case NUMSTYLE_DATETIME:
-			resCode = _T("yyyy.mm.dd hh:mm:ss");
-			break;
-		case NUMSTYLE_DATE:
-			resCode = _T("yyyy.mm.dd");
-			break;
-		case NUMSTYLE_TIME:
-			resCode = _T("hh:mm:ss");
-			break;
-
-		case NUMSTYLE_GENERAL:
-		case NUMSTYLE_NUMERIC:
-		default:
-			affix = _T("");
-			break;
-	}
-
-	if (fmt.numberStyle == NUMSTYLE_GENERAL || fmt.numberStyle == NUMSTYLE_NUMERIC ||
-		fmt.numberStyle == NUMSTYLE_EXPONENTIAL || fmt.numberStyle == NUMSTYLE_PERCENTAGE ||
-		fmt.numberStyle == NUMSTYLE_MONEY) {
-
-		resCode = GetFormatCodeColor(fmt.positiveColor) + thousandPrefix + digits + affix;
-		if (addNegative) {
-			resCode += _T(";") + GetFormatCodeColor(fmt.negativeColor) + _T("\\-") + thousandPrefix + digits + affix;
-		}
-		if (addZero) {
-			if (addNegative == false) resCode += _T(";");
-			resCode += _T(";") + GetFormatCodeColor(fmt.zeroColor) + _T("0") + affix;
-		}
-	}
-
-	return resCode;
-}
-
-// ****************************************************************************
-/// @brief  Converts numeric format color into its string representation
-/// @param  color color code
-/// @return String color code
-// ****************************************************************************
-_tstring CWorkbook::GetFormatCodeColor(ENumericStyleColor color)
-{
-	switch (color) {
-		case NUMSTYLE_COLOR_BLACK:	return _T("[BLACK]");
-		case NUMSTYLE_COLOR_GREEN:	return _T("[Green]");
-		case NUMSTYLE_COLOR_WHITE:	return _T("[White]");
-		case NUMSTYLE_COLOR_BLUE:	return _T("[Blue]");
-		case NUMSTYLE_COLOR_MAGENTA:return _T("[Magenta]");
-		case NUMSTYLE_COLOR_YELLOW:	return _T("[Yellow]");
-		case NUMSTYLE_COLOR_CYAN:	return _T("[Cyan]");
-		case NUMSTYLE_COLOR_RED:	return _T("[Red]");
-
-		case NUMSTYLE_COLOR_DEFAULT:
-		default:					return _T("");
-	}
-}
-
-// ****************************************************************************
-/// @brief  Appends fonts section into styles file
-/// @param  stream reference to xml stream
-/// @return no
-// ****************************************************************************
-void CWorkbook::AddFonts(xmlw::XmlStream& stream) const
-{
-    const int32_t defaultCharset = 204;
-    vector<Font> fonts = m_styleList.GetFonts();
-
-    stream
-    << tag(_T("fonts")) << attr(_T("count")) << fonts.size();
-
-    for (size_t i = 0; i < fonts.size(); i++) {
-        Font &font = fonts[i];
-
-        stream
-        << tag(_T("font"));
-
-        if (font.attributes & FONT_BOLD)
-            stream << tag(_T("b")) << endtag();
-        if (font.attributes & FONT_ITALIC)
-            stream << tag(_T("i")) << endtag();
-        if (font.attributes & FONT_UNDERLINED)
-            stream << tag(_T("u")) << endtag();
-        if (font.attributes & FONT_STRIKE)
-            stream << tag(_T("strike")) << endtag();
-        if (font.attributes & FONT_OUTLINE)
-            stream << tag(_T("outline")) << endtag();
-        if (font.attributes & FONT_SHADOW)
-            stream << tag(_T("shadow")) << endtag();
-        if (font.attributes & FONT_CONDENSE)
-            stream << tag(_T("condense")) << endtag();
-        if (font.attributes & FONT_EXTEND)
-            stream << tag(_T("extend")) << endtag();
-
-        stream
-            << tag(_T("sz")) << attr(_T("val")) << font.size << endtag()
-            << tag(_T("name")) << attr(_T("val")) << font.name << endtag()
-            << tag(_T("charset")) << attr(_T("val")) << defaultCharset << endtag();
-
-        if (font.theme || font.color == _T("")) {
-            stream
-            << tag(_T("color")) << attr(_T("theme")) << 1 << endtag();
-        }
-        else {
-            stream
-            << tag(_T("color")) << attr(_T("rgb")) << font.color.c_str() << endtag();
+        if( fmt.positiveColor != NUMSTYLE_COLOR_DEFAULT )
+        {
+            addNegative = addZero = true;
         }
 
-        stream
-        << endtag();
-    }
-
-	stream
-    << endtag();
-}
-
-// ****************************************************************************
-/// @brief  Appends fills section into styles file
-/// @param  stream reference to xml stream
-/// @return no
-// ****************************************************************************
-void CWorkbook::AddFills(xmlw::XmlStream& stream) const
-{
-    vector<Fill> fills = m_styleList.GetFills();
-
-    stream
-    << tag(_T("fills")) << attr(_T("count")) << fills.size();
-
-    _tstring strPattern;
-    for (size_t i = 0; i < fills.size(); i++) {
-        Fill &fill = fills[i];
-
-        stream
-        << tag(_T("fill"))
-            << tag(_T("patternFill")) << attr(_T("patternType"));
-
-        switch (fill.patternType) {
-        case PATTERN_DARK_DOWN:     strPattern = _T("darkDown"); break;
-        case PATTERN_DARK_GRAY:     strPattern = _T("darkGray"); break;
-        case PATTERN_DARK_GRID:     strPattern = _T("darkGrid"); break;
-        case PATTERN_DARK_HORIZ:    strPattern = _T("darkHorizontal"); break;
-        case PATTERN_DARK_TRELLIS:  strPattern = _T("darkTrellis"); break;
-        case PATTERN_DARK_UP:       strPattern = _T("darkUp"); break;
-        case PATTERN_DARK_VERT:     strPattern = _T("darkVertical"); break;
-        case PATTERN_GRAY_0625:     strPattern = _T("gray0625"); break;
-        case PATTERN_GRAY_125:      strPattern = _T("gray125"); break;
-        case PATTERN_LIGHT_DOWN:    strPattern = _T("lightDown"); break;
-        case PATTERN_LIGHT_GRAY:    strPattern = _T("lightGray"); break;
-        case PATTERN_LIGHT_GRID:    strPattern = _T("lightGrid"); break;
-        case PATTERN_LIGHT_HORIZ:   strPattern = _T("lightHorizontal"); break;
-        case PATTERN_LIGHT_TRELLIS: strPattern = _T("lightTrellis"); break;
-        case PATTERN_LIGHT_UP:      strPattern = _T("lightUp"); break;
-        case PATTERN_LIGHT_VERT:    strPattern = _T("lightVertical"); break;
-        case PATTERN_MEDIUM_GRAY:   strPattern = _T("mediumGray"); break;
-        case PATTERN_NONE:          strPattern = _T("none"); break;
-        case PATTERN_SOLID:         strPattern = _T("solid"); break;
+        if( fmt.negativeColor != NUMSTYLE_COLOR_DEFAULT )
+        {
+            addNegative = true;
         }
 
-        stream << strPattern.c_str();
-
-        if (fill.bgColor != _T("")) {
-            stream
-                << tag(_T("bgColor")) << attr(_T("rgb")) << fill.bgColor.c_str() << endtag();
-        }
-        if (fill.fgColor != _T("")) {
-            stream
-                << tag(_T("fgColor")) << attr(_T("rgb")) << fill.fgColor.c_str() << endtag();
+        if( fmt.zeroColor != NUMSTYLE_COLOR_DEFAULT )
+        {
+            addZero = true;
         }
 
-        stream
-            << endtag()
-        << endtag();
-    }
+        std::string thousandPrefix;
+        if( fmt.showThousandsSeparator ) thousandPrefix = "#,##";
 
-    stream
-    << endtag();
-}
+        static std::string currency = CurrencySymbol();
 
-// ****************************************************************************
-/// @brief  Appends borders section into styles file
-/// @param  stream reference to xml stream
-/// @return no
-// ****************************************************************************
-void CWorkbook::AddBorders(xmlw::XmlStream& stream) const
-{
-    vector<Border> borders = m_styleList.GetBorders();
-
-    stream
-    << tag(_T("borders")) << attr(_T("count")) << borders.size();
-
-    for (size_t i = 0; i < borders.size(); i++) {
-        stream
-        << tag(_T("border"));
-
-        if (borders[i].isDiagonalUp) {
-			stream << attr(_T("diagonalUp")) << 1;
+        std::string resCode;
+        std::string affix;
+        std::string digits = "0";
+        if( fmt.numberOfDigitsAfterPoint != 0 )
+        {
+            digits.append( "." );
+            digits.append( fmt.numberOfDigitsAfterPoint, '0' );
         }
 
-        if (borders[i].isDiagonalDown) {
-			stream << attr(_T("diagonalDown")) << 1;
+        switch( fmt.numberStyle )
+        {
+            case NUMSTYLE_EXPONENTIAL:
+                affix = "E+00";
+                break;
+            case NUMSTYLE_PERCENTAGE:
+                affix = "%";
+                break;
+            case NUMSTYLE_FINANCIAL:
+                //_-* #,##0.00"$"_-;\-* #,##0.00"$"_-;_-* "-"??"$"_-;_-@_-
+
+                resCode = 	GetFormatCodeColor( fmt.positiveColor ) + "_-* " + thousandPrefix + digits + currency + "_-;" +
+                            GetFormatCodeColor( fmt.negativeColor ) + "\\-* " + thousandPrefix + digits + currency + "_-;" +
+                            "_-* &quot;-&quot;??" + currency + "_-;_-@_-";
+                break;
+            case NUMSTYLE_MONEY:
+                affix = " " + currency;
+                break;
+            case NUMSTYLE_DATETIME:
+                resCode = "yyyy.mm.dd hh:mm:ss";
+                break;
+            case NUMSTYLE_DATE:
+                resCode = "yyyy.mm.dd";
+                break;
+            case NUMSTYLE_TIME:
+                resCode = "hh:mm:ss";
+                break;
+
+            case NUMSTYLE_GENERAL:
+            case NUMSTYLE_NUMERIC:
+                /*default:*/
+                affix = "";
+                break;
         }
 
-		AddBorder(stream, _T("left"), borders[i].left);
-		AddBorder(stream, _T("right"), borders[i].right);
-		AddBorder(stream, _T("top"), borders[i].top);
-		AddBorder(stream, _T("bottom"), borders[i].bottom);
-		AddBorder(stream, _T("diagonal"), borders[i].diagonal);
+        if( fmt.numberStyle == NUMSTYLE_GENERAL || fmt.numberStyle == NUMSTYLE_NUMERIC ||
+                fmt.numberStyle == NUMSTYLE_EXPONENTIAL || fmt.numberStyle == NUMSTYLE_PERCENTAGE ||
+                fmt.numberStyle == NUMSTYLE_MONEY )
+        {
 
-        stream
-        << endtag();
-    }
-
-    stream
-    << endtag();
-}
-
-// ****************************************************************************
-/// @brief  Appends border item section into borders set
-/// @param  stream reference to xml stream
-/// @param	borderName border name
-/// @param	border style set
-/// @return no
-// ****************************************************************************
-void CWorkbook::AddBorder(xmlw::XmlStream& stream, const TCHAR *borderName, Border::BorderItem border) const
-{
-	_tstring sStyle;
-
-	switch(border.style) {
-	case BORDER_THIN:				sStyle = _T("thin"); break;
-	case BORDER_MEDIUM:				sStyle = _T("medium"); break;
-	case BORDER_DASHED:				sStyle = _T("dashed"); break;
-	case BORDER_DOTTED:				sStyle = _T("dotted"); break;
-	case BORDER_THICK:				sStyle = _T("thick"); break;
-	case BORDER_DOUBLE:				sStyle = _T("double"); break;
-	case BORDER_HAIR:				sStyle = _T("hair"); break;
-	case BORDER_MEDIUM_DASHED:		sStyle = _T("mediumDashed"); break;
-	case BORDER_DASH_DOT:			sStyle = _T("dashDot"); break;
-	case BORDER_MEDIUM_DASH_DOT:	sStyle = _T("mediumDashDot"); break;
-	case BORDER_DASH_DOT_DOT:		sStyle = _T("dashDotDot"); break;
-	case BORDER_MEDIUM_DASH_DOT_DOT:sStyle = _T("mediumDashDotDot"); break;
-	case BORDER_SLANT_DASH_DOT:		sStyle = _T("slantDashDot"); break;
-
-	case BORDER_NONE:
-	default:						break;
-	}
-
-	stream << tag(borderName);
-
-	if (sStyle != _T("")) {
-		stream << attr(_T("style")) << sStyle.c_str();
-
-		stream << tag(_T("color"));
-		if (border.color != _T("")) {
-			stream << attr(_T("rgb")) << border.color.c_str();
-		}
-		else {
-			stream << attr(_T("indexed")) << 64;
-		}
-		stream << endtag();
-	}
-
-	stream << endtag();
-}
-
-// ****************************************************************************
-/// @brief  ...
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::SaveChain()
-{
-    // [- zip/xl/calcChain.xml
-    const TCHAR *szFilename = _T("xl/calcChain.xml");
-    TCHAR szPathToFile[MAX_PATH] = { 0 };
-    _stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), szFilename);
-    MakeDirectory(szPathToFile);
-    char szPath[MAX_PATH] = { 0 };
-#ifdef UNICODE
-        int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-        if (res == -1) return false;
-#else
-		_stprintf(szPath, _T("%s"), szPathToFile);
-#endif
-        _tofstream f(szPath);
-    XmlStream xml_stream(f);
-
-    m_contentFiles.push_back(szFilename);
-
-    xml_stream << prolog()
-    << tag(_T("calcChain")) << attr(_T("xmlns")) << ns_book;
-
-    for (size_t i = 0; i < m_worksheets.size(); i++) {
-        if (m_worksheets[i]->IsThereFormula()) {
-            vector<_tstring> vstrChain;
-            m_worksheets[i]->GetCalcChain(vstrChain);
-
-            for (size_t j = 0; j < vstrChain.size(); j++) {
-                xml_stream << tag(_T("c"));
-                if (j == 0) xml_stream << attr(_T("i")) << i+1;
-                xml_stream << attr(_T("r")) << vstrChain[j].c_str() << endtag();
+            resCode = GetFormatCodeColor( fmt.positiveColor ) + thousandPrefix + digits + affix;
+            if( addNegative )
+            {
+                resCode += ";" + GetFormatCodeColor( fmt.negativeColor ) + "\\-" + thousandPrefix + digits + affix;
+            }
+            if( addZero )
+            {
+                if( addNegative == false ) resCode += ";";
+                resCode += ";" + GetFormatCodeColor( fmt.zeroColor ) + "0" + affix;
             }
         }
-    }
-    // zip/xl/calcChain.xml -]
 
-    return true;
-}
-
-// ****************************************************************************
-/// @brief  ...
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::SaveComments()
-{
-	if (m_comments.empty()) return true;
-
-	std::vector<Comment*> sheet_comments;
-	std::vector<std::vector<Comment*> > comments;
-
-	std::sort(m_comments.begin(), m_comments.end());
-
-	int active_sheet = m_comments[0].sheetIndex;
-	for (size_t i = 0; i < m_comments.size(); i++) {
-		if (m_comments[i].sheetIndex == active_sheet) {
-			sheet_comments.push_back(&m_comments[i]);
-		}
-		else {
-			active_sheet = m_comments[i].sheetIndex;
-			comments.push_back(sheet_comments);
-			sheet_comments.clear();
-
-			i--;
-		}
-	}
-
-	comments.push_back(sheet_comments);
-	sheet_comments.clear();
-
-	for (size_t i = 0; i < comments.size(); i++) {
-		if (SaveCommentList(comments[i]) == false)
-			return false;
-	}
-
-	return true;
-}
-
-// ****************************************************************************
-/// @brief  ...
-/// @param	comments comment list on the sheet
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::SaveCommentList(std::vector<Comment*> &comments)
-{
-	// [- zip/xl/commentsN.xml
-	{
-		TCHAR szFilename[MAX_PATH] = { 0 };
-		_stprintf(szFilename, _T("xl/comments%d.xml"), comments[0]->sheetIndex);
-		TCHAR szPathToFile[MAX_PATH] = { 0 };
-		_stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), szFilename);
-		MakeDirectory(szPathToFile);
-		char szPath[MAX_PATH] = { 0 };
-
-		m_contentFiles.push_back(szFilename);
-
-#ifdef UNICODE
-		int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-		if (res == -1) return false;
-#else
-		_stprintf(szPath, _T("%s"), szPathToFile);
-#endif
-		_tofstream f(szPath);
-		XmlStream xml_stream(f);
-
-		TCHAR szUserName[MAX_PATH] = { 0 };
-        TCHAR *szTempName = _tgetenv(_T("USERNAME"));
-        if (szTempName != NULL) _stprintf(szUserName, _T("%s"), szTempName);
-        else _stprintf(szUserName, _T("Unknown"));
-
-		xml_stream << prolog()
-		<< tag(_T("comments")) << attr(_T("xmlns")) << ns_book
-			<< tag(_T("authors"))
-				<< tag(_T("author")) << chardata() << szUserName << endtag()
-			<< endtag()
-			<< tag(_T("commentList"));
-
-		for (size_t i = 0; i < comments.size(); i++) {
-			AddComment(xml_stream, *(comments[i]));
-		}
-
-		xml_stream
-			<< endtag()
-		<< endtag();
-	}
-	// zip/xl/commentsN.xml -]
-
-	// [- zip/xl/drawings/vmlDrawingN.xml
-	{
-		TCHAR szFilename[MAX_PATH] = { 0 };
-		_stprintf(szFilename, _T("xl/drawings/vmlDrawing%d.vml"), comments[0]->sheetIndex);
-		TCHAR szPathToFile[MAX_PATH] = { 0 };
-		_stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), szFilename);
-		MakeDirectory(szPathToFile);
-		char szPath[MAX_PATH] = { 0 };
-
-		_tstring sFilename = szFilename;
-		m_contentFiles.push_back(sFilename);
-
-#ifdef UNICODE
-		int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-		if (res == -1) return false;
-#else
-		_stprintf(szPath, _T("%s"), szPathToFile);
-#endif
-		_tofstream f(szPath);
-		XmlStream xml_stream(f);
-
-		xml_stream
-		<< tag(_T("xml"))
-			<< attr(_T("xmlns:v")) << _T("urn:schemas-microsoft-com:vml")
-			<< attr(_T("xmlns:o")) << _T("urn:schemas-microsoft-com:office:office")
-			<< attr(_T("xmlns:x")) << _T("urn:schemas-microsoft-com:office:excel")
-
-			<< tag(_T("o:shapelayout")) << attr(_T("v:ext")) << _T("edit")
-				<< tag(_T("o:idmap")) << attr(_T("v:ext")) << _T("edit") << attr(_T("data")) << 1 << endtag()
-			<< endtag()
-
-			<< tag(_T("v:shapetype"))
-				<< attr(_T("id")) << _T("_x0000_t202")
-				<< attr(_T("coordsize")) << _T("21600,21600")
-				<< attr(_T("o:spt")) << 202
-				<< attr(_T("path")) << _T("m,l,21600r21600,l21600,xe")
-
-				<< tag(_T("v:stroke")) << attr(_T("joinstyle")) << _T("miter") << endtag()
-				<< tag(_T("v:path")) << attr(_T("gradientshapeok")) << _T("t") << attr(_T("o:connecttype")) << _T("rect") << endtag()
-			<< endtag();
-
-
-		for (size_t i = 0; i < comments.size(); i++) {
-			AddCommentDrawing(xml_stream, *(comments[i]));
-		}
-
-		//xml_stream
-		//<< endtag();
-	}
-	// zip/xl/drawings/vmlDrawingN.xml -]
-
-	return true;
-}
-
-// ****************************************************************************
-/// @brief  ...
-/// @param  stream reference to xml stream
-/// @param	comments comment list on the sheet
-/// @return Boolean result of the operation
-// ****************************************************************************
-void CWorkbook::AddComment(xmlw::XmlStream &xml_stream, const Comment &comment) const
-{
-	TCHAR szCell[15] = { 0 };
-	CWorksheet::GetCellCoord(comment.cellRef, szCell);
-
-	xml_stream
-	<< tag(_T("comment")) << attr(_T("ref")) << szCell << attr(_T("authorId")) << 0
-		<< tag(_T("text"));
-
-	for (size_t r = 0; r < comment.contents.size(); r++) {
-		xml_stream
-			<< tag(_T("r"))
-				<< tag(_T("rPr"));
-
-        const Font &font = comment.contents[r].first;
-        if (font.attributes & FONT_BOLD)
-            xml_stream << tag(_T("b")) << endtag();
-        if (font.attributes & FONT_ITALIC)
-            xml_stream << tag(_T("i")) << endtag();
-        if (font.attributes & FONT_UNDERLINED)
-            xml_stream << tag(_T("u")) << endtag();
-        if (font.attributes & FONT_STRIKE)
-            xml_stream << tag(_T("strike")) << endtag();
-        if (font.attributes & FONT_OUTLINE)
-            xml_stream << tag(_T("outline")) << endtag();
-        if (font.attributes & FONT_SHADOW)
-            xml_stream << tag(_T("shadow")) << endtag();
-        if (font.attributes & FONT_CONDENSE)
-            xml_stream << tag(_T("condense")) << endtag();
-        if (font.attributes & FONT_EXTEND)
-            xml_stream << tag(_T("extend")) << endtag();
-
-        xml_stream
-            << tag(_T("sz")) << attr(_T("val")) << font.size << endtag()
-            << tag(_T("rFont")) << attr(_T("val")) << font.name << endtag()
-            << tag(_T("charset")) << attr(_T("val")) << 1 << endtag();
-
-        if (font.theme || font.color == _T("")) {
-            xml_stream
-            << tag(_T("color")) << attr(_T("theme")) << 1 << endtag();
-        }
-        else {
-            xml_stream
-            << tag(_T("color")) << attr(_T("rgb")) << font.color.c_str() << endtag();
-        }
-
-		xml_stream
-				<< endtag()
-				<< tag(_T("t")) << chardata() << comment.contents[r].second.c_str() << endtag()
-			<< endtag();
-	}
-
-	xml_stream
-		<< endtag()
-	<< endtag();
-}
-
-// ****************************************************************************
-/// @brief  ...
-/// @param  stream reference to xml stream
-/// @param	comments comment list on the sheet
-/// @return Boolean result of the operation
-// ****************************************************************************
-void CWorkbook::AddCommentDrawing(xmlw::XmlStream &xml_stream, const Comment &comment) const
-{
-	TCHAR szId[20] = { 0 };
-	_stprintf(szId, _T("_x0000_s%d"), 1000 + (++m_commLastId));
-
-	TCHAR szStyle[MAX_PATH] = { 0 };
-	if (comment.x >= 0 && comment.y >= 0 && comment.width > 0 && comment.height > 0) {
-		_stprintf(szStyle, _T("position:absolute; margin-left:%dpt;margin-top:%dpt;width:%dpt;height:%dpt; z-index:2"),
-					comment.x, comment.y, comment.width, comment.height);
-	}
-
-	if (comment.isHidden) {
-		_tcscat(szStyle, _T(";visibility:hidden"));
-	}
-
-	bool wrapText = false;
-	for (size_t i = 0; i < comment.contents.size(); i++) {
-		if (comment.contents[i].second.find(_T("\n")) != std::string::npos) {
-			wrapText = true;
-			break;
-		}
-	}
-
-	if (wrapText) {
-		_tcscat(szStyle, _T(";mso-wrap-style:tight"));
-	}
-
-	xml_stream
-	<< tag(_T("v:shape"))
-		<< attr(_T("id")) << szId
-		<< attr(_T("type")) << _T("#_x0000_t202")
-		<< attr(_T("style")) << szStyle
-		<< attr(_T("fillcolor")) << comment.fillColor.c_str()
-		<< attr(_T("o:insetmode")) << _T("auto")
-
-		<< tag(_T("v:fill")) << attr(_T("color2")) << comment.fillColor.c_str() << endtag()
-		<< tag(_T("v:shadow")) << attr(_T("on")) << _T("t") << attr(_T("color")) << _T("black") << attr(_T("obscured")) << _T("t") << endtag()
-		<< tag(_T("v:path")) << attr(_T("o:connecttype")) << _T("none") << endtag()
-		<< tag(_T("v:textbox")) << attr(_T("style")) << _T("mso-direction-alt:auto")
-			<< tag(_T("div")) << attr(_T("style")) << _T("text-align:left") << endtag()
-		<< endtag()
-		<< tag(_T("x:ClientData")) << attr(_T("ObjectType")) << _T("Note")
-			<< tag(_T("x:MoveWithCells")) << endtag()
-			<< tag(_T("x:SizeWithCells")) << endtag()
-			//<< tag(_T("x:Anchor")) << chardata() << "...." << endtag()
-			<< tag(_T("x:AutoFill")) << chardata() << _T("False") << endtag()
-			<< tag(_T("x:Row")) << chardata() << comment.cellRef.row - 1 << endtag()
-			<< tag(_T("x:Column")) << chardata() << comment.cellRef.col << endtag()
-		<< endtag()
-	<<endtag();
-}
-
-// ****************************************************************************
-/// @brief  ...
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::SaveSharedStrings()
-{
-	// [- zip/xl/sharedStrings.xml
-    if (m_sharedStrings.empty()) return true;
-
-    const TCHAR *szFilename = _T("xl/sharedStrings.xml");
-    TCHAR szPathToFile[MAX_PATH] = { 0 };
-    _stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), szFilename);
-    MakeDirectory(szPathToFile);
-    char szPath[MAX_PATH] = { 0 };
-#ifdef UNICODE
-        int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-        if (res == -1) return false;
-#else
-		_stprintf(szPath, _T("%s"), szPathToFile);
-#endif
-        _tofstream f(szPath);
-    XmlStream xml_stream(f);
-
-    m_contentFiles.push_back(szFilename);
-
-    xml_stream << prolog()
-    << tag(_T("sst")) << attr(_T("xmlns")) << ns_book << attr(_T("count")) << m_sharedStrings.size() << attr(_T("uniqueCount")) << m_sharedStrings.size();
-
-    vector<_tstring*> pointers_to_hash;
-    pointers_to_hash.resize(m_sharedStrings.size());
-    for (map<_tstring, uint64_t>::iterator it = m_sharedStrings.begin(); it != m_sharedStrings.end(); it++) {
-        pointers_to_hash[it->second] = const_cast<_tstring*>(&it->first);
+        return resCode;
     }
 
-    for (size_t i = 0; i < pointers_to_hash.size(); i++) {
-        xml_stream
-        << tag(_T("si")) << tag(_T("t")) << chardata() << *(pointers_to_hash[i]) << endtag() << endtag();
-    }
-    // zip/xl/sharedStrings.xml -]
-
-    return true;
-}
-
-// ****************************************************************************
-/// @brief  ...
-/// @return Boolean result of the operation
-// ****************************************************************************
-bool CWorkbook::SaveWorkbook() const
-{
+    // ****************************************************************************
+    /// @brief  Converts numeric format color into its string representation
+    /// @param  color color code
+    /// @return String color code
+    // ****************************************************************************
+    std::string CWorkbook::GetFormatCodeColor( ENumericStyleColor color )
     {
-		// [- zip/xl/_rels/workbook.xml.rels
-		TCHAR szPathToFile[MAX_PATH] = { 0 };
-        _stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), m_contentFiles[6].c_str());
-        MakeDirectory(szPathToFile);
-        char szPath[MAX_PATH] = { 0 };
-#ifdef UNICODE
-        int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-        if (res == -1) return false;
+        switch( color )
+        {
+            case NUMSTYLE_COLOR_BLACK   :	return "[BLACK]";
+            case NUMSTYLE_COLOR_GREEN   :	return "[Green]";
+            case NUMSTYLE_COLOR_WHITE   :	return "[White]";
+            case NUMSTYLE_COLOR_BLUE    :	return "[Blue]";
+            case NUMSTYLE_COLOR_MAGENTA :   return "[Magenta]";
+            case NUMSTYLE_COLOR_YELLOW  :	return "[Yellow]";
+            case NUMSTYLE_COLOR_CYAN    :	return "[Cyan]";
+            case NUMSTYLE_COLOR_RED     :	return "[Red]";
+
+            case NUMSTYLE_COLOR_DEFAULT :
+                /*default:*/                        return "";
+        }
+        return "";
+    }
+
+    std::string CWorkbook::CurrencySymbol()
+    {
+#ifdef _WIN32
+        //Work directly with WinAPI because MinGW not working properly with std::locale...
+#ifdef _UNICODE
+        setlocale( LC_ALL, "" );
+        struct lconv * lc = localeconv();
+        if( lc == NULL ) return "";
+        int WideBufSize = MultiByteToWideChar( CP_ACP, 0, lc->currency_symbol, -1, 0, 0 );
+        if( WideBufSize == 0 ) return "";
+        std::vector<WCHAR> WideBuf( WideBufSize );
+        WideBufSize = MultiByteToWideChar( CP_ACP, 0, lc->currency_symbol, -1, WideBuf.data(), WideBufSize );
+        if( WideBufSize == 0 ) return "";
+
+        int Utf8BufSize = WideCharToMultiByte( CP_UTF8, 0, WideBuf.data(), WideBufSize, NULL, 0, NULL, NULL );
+        if( Utf8BufSize == 0 ) return "";
+        std::vector<char> SingleBuf( Utf8BufSize );
+        Utf8BufSize = WideCharToMultiByte( CP_UTF8, 0, WideBuf.data(), WideBufSize, SingleBuf.data(), Utf8BufSize, NULL, NULL );
+        if( Utf8BufSize == 0 ) return "";
+        return SingleBuf.data();
 #else
-		_stprintf(szPath, _T("%s"), szPathToFile);
+        struct lconv * lc = localeconv();
+        if( lc == NULL ) return "";
+        return std::string( lc->currency_symbol );
 #endif
-        _tofstream f(szPath);
-        XmlStream xml_stream(f);
 
-		xml_stream << prolog()
-		<< tag(_T("Relationships")) << attr(_T("xmlns")) << ns_relationships
-            << tag(_T("Relationship")) << attr(_T("Id")) << _T("rId1") << attr(_T("Type")) << type_style << attr(_T("Target")) << _T("styles.xml")
-            << endtag()
-            << tag(_T("Relationship")) << attr(_T("Id")) << _T("rId2") << attr(_T("Type")) << type_theme << attr(_T("Target")) << _T("theme/theme1.xml")
-            << endtag();
-
-        TCHAR szId[10] = { 0 };
-        TCHAR szPropValue[100] = { 0 };
-
-        int32_t id = 3;
-        bool bFormula = false;
-        for (size_t i = 0; i < m_worksheets.size(); i++) {
-            _stprintf(szId, _T("rId%d"), id++);
-            _stprintf(szPropValue, _T("worksheets/sheet%d.xml"), m_worksheets[i]->GetIndex());
-
-            xml_stream
-            << tag(_T("Relationship")) << attr(_T("Id")) << szId << attr(_T("Type")) << type_sheet << attr(_T("Target")) << szPropValue
-            << endtag();
-
-            if (m_worksheets[i]->IsThereFormula()) bFormula = true;
-        }
-
-        if (bFormula) {
-            _stprintf(szId, _T("rId%d"), id++);
-
-            xml_stream
-            << tag(_T("Relationship")) << attr(_T("Id")) << szId << attr(_T("Type")) << type_chain << attr(_T("Target")) << _T("calcChain.xml")
-            << endtag();
-        }
-
-        for (size_t i = 0; i < m_charts.size(); i++) {
-            _stprintf(szId, _T("rId%d"), id++);
-            _stprintf(szPropValue, _T("chartsheets/sheet%d.xml"), m_charts[i]->GetIndex());
-
-            xml_stream
-            << tag(_T("Relationship")) << attr(_T("Id")) << szId << attr(_T("Type")) << type_chartsheet << attr(_T("Target")) << szPropValue
-            << endtag();
-        }
-
-        if (!m_sharedStrings.empty()) {
-			_stprintf(szId, _T("rId%d"), id++);
-			xml_stream
-			<< tag(_T("Relationship")) << attr(_T("Id")) << szId << attr(_T("Type")) << type_sharedStr << attr(_T("Target")) << _T("sharedStrings.xml")
-            << endtag();
-        }
-		// zip/xl/_rels/workbook.xml.rels -]
-	}
-
-	{
-		// [- zip/xl/workbook.xml
-		TCHAR szPathToFile[MAX_PATH] = { 0 };
-        _stprintf(szPathToFile, _T("%s/%s"), m_temp_path.c_str(), m_contentFiles[4].c_str());
-        MakeDirectory(szPathToFile);
-        char szPath[MAX_PATH] = { 0 };
-#ifdef UNICODE
-        int32_t res = wcstombs(szPath, szPathToFile, MAX_PATH);
-        if (res == -1) return false;
 #else
-		_stprintf(szPath, _T("%s"), szPathToFile);
+
+        std::locale loc( "" );
+#ifdef _UNICODE
+        std::wstring CurrencySymbol = std::use_facet<std::moneypunct<wchar_t> >( loc ).curr_symbol();
+        return UTF8Encoder::From_wstring( CurrencySymbol );
+#else
+        return std::use_facet<std::moneypunct<char> >( loc ).curr_symbol();
 #endif
-        _tofstream f(szPath);
-        XmlStream xml_stream(f);
 
-		xml_stream << prolog()
-		<< tag(_T("workbook")) << attr(_T("xmlns")) << ns_book << attr(_T("xmlns:r")) << ns_book_r
-            << tag(_T("fileVersion"))   << attr(_T("appName")) << _T("xl") << attr(_T("lastEdited")) << 5
-										<< attr(_T("lowestEdited")) << 5 << attr(_T("rupBuild")) << 9302
-            << endtag()
-            << tag(_T("workbookPr")) << attr(_T("codeName")) << _T("ThisWorkbook") << attr(_T("defaultThemeVersion")) << 124226
-            << endtag()
-            << tag(_T("bookViews"))
-                << tag(_T("workbookView"))  << attr(_T("xWindow")) << 270 << attr(_T("yWindow")) << 630
-											<< attr(_T("windowWidth")) << 24615 << attr(_T("windowHeight")) << 11445
-                << endtag()
-            << endtag();
-
-		TCHAR szId[10] = { 0 };
-        TCHAR szPropValue[100] = { 0 };
-
-        if ( !m_worksheets.empty() || !m_charts.empty() ) {
-            xml_stream << tag(_T("sheets"));
-        }
-
-        int32_t sheetId = 1;
-        int32_t rId = 3;
-        bool bFormula = false;
-        for (size_t i = 0; i < m_worksheets.size(); i++) {
-            _stprintf(szId, _T("rId%d"), rId++);
-            _stprintf(szPropValue, _T("worksheets/sheet%d.xml"), m_worksheets[i]->GetIndex());
-
-            xml_stream << tag(_T("sheet"))  << attr(_T("name")) << m_worksheets[i]->GetTitle().c_str()
-											<< attr(_T("sheetId")) << sheetId++
-											<< attr(_T("r:id")) << szId << endtag();
-
-            if (m_worksheets[i]->IsThereFormula()) bFormula = true;
-        }
-
-        if (bFormula) rId++;
-
-        for (size_t i = 0; i < m_charts.size(); i++) {
-            _stprintf(szId, _T("rId%d"), rId++);
-            _stprintf(szPropValue, _T("chartsheets/sheet%d.xml"), m_charts[i]->GetIndex());
-
-            xml_stream << tag(_T("sheet"))  << attr(_T("name")) << m_charts[i]->GetTitle().c_str()
-											<< attr(_T("sheetId")) << sheetId++
-											<< attr(_T("r:id")) << szId << endtag();
-        }
-
-        if ( !m_worksheets.empty() || !m_charts.empty() ) {
-            xml_stream << endtag();
-        }
-
-        xml_stream << tag(_T("calcPr")) << attr(_T("calcId")) << 124519 << endtag();
-		// zip/xl/workbook.xml -]
-	}
-
-    return true;
-}
-
-// ****************************************************************************
-/// @brief  Deletes all temporary files and directories which have been created
-/// @return no
-// ****************************************************************************
-void CWorkbook::ClearTemp()
-{
-    TCHAR szPath[MAX_PATH] = { 0 };
-    for (size_t i = 0; i < m_contentFiles.size(); i++) {
-    	_stprintf(szPath, _T("%s/%s"), m_temp_path.c_str(), m_contentFiles[i].c_str());
-        _tremove(szPath);
+#endif
     }
 
-    if (m_worksheets.empty() == false) {
-        if (m_comments.empty() == false) {
-			_trmdir((m_temp_path + _T("/xl/worksheets/_rels")).c_str());
-			_trmdir((m_temp_path + _T("/xl/drawings")).c_str());
+    // ****************************************************************************
+    /// @brief  Appends fonts section into styles file
+    /// @param  stream reference to xml stream
+    /// @return no
+    // ****************************************************************************
+    void CWorkbook::AddFonts( XMLWriter & xmlw ) const
+    {
+        const int32_t defaultCharset = 204;
+        const std::vector<Font> & fonts = m_styleList.GetFonts();
+        xmlw.Tag( "fonts" ).Attr( "count", fonts.size() );
+        for( std::vector<Font>::const_iterator it = fonts.begin(); it != fonts.end(); it++ )
+        {
+            xmlw.Tag( "font" );
+            AddFontInfo( xmlw, * it, "name", defaultCharset );
+            xmlw.End( "font" );
+        }
+        xmlw.End( "fonts" );
+    }
+
+    // ****************************************************************************
+    /// @brief  Appends fills section into styles file
+    /// @param  stream reference to xml stream
+    /// @return no
+    // ****************************************************************************
+    void CWorkbook::AddFills( XMLWriter & xmlw ) const
+    {
+        const std::vector<Fill> & fills = m_styleList.GetFills();
+
+        xmlw.Tag( "fills" ).Attr( "count", fills.size() );
+        const char * strPattern = NULL;
+        for( std::vector<Fill>::const_iterator it = fills.begin(); it != fills.end(); it++ )
+        {
+            xmlw.Tag( "fill" ).Tag( "patternFill" );
+            switch( it->patternType )
+            {
+                case PATTERN_DARK_DOWN      :   strPattern = "darkDown";        break;
+                case PATTERN_DARK_GRAY      :   strPattern = "darkGray";        break;
+                case PATTERN_DARK_GRID      :   strPattern = "darkGrid";        break;
+                case PATTERN_DARK_HORIZ     :   strPattern = "darkHorizontal";  break;
+                case PATTERN_DARK_TRELLIS   :   strPattern = "darkTrellis";     break;
+                case PATTERN_DARK_UP        :   strPattern = "darkUp";          break;
+                case PATTERN_DARK_VERT      :   strPattern = "darkVertical";    break;
+                case PATTERN_GRAY_0625      :   strPattern = "gray0625";        break;
+                case PATTERN_GRAY_125       :   strPattern = "gray125";         break;
+                case PATTERN_LIGHT_DOWN     :   strPattern = "lightDown";       break;
+                case PATTERN_LIGHT_GRAY     :   strPattern = "lightGray";       break;
+                case PATTERN_LIGHT_GRID     :   strPattern = "lightGrid";       break;
+                case PATTERN_LIGHT_HORIZ    :   strPattern = "lightHorizontal"; break;
+                case PATTERN_LIGHT_TRELLIS  :   strPattern = "lightTrellis";    break;
+                case PATTERN_LIGHT_UP       :   strPattern = "lightUp";         break;
+                case PATTERN_LIGHT_VERT     :   strPattern = "lightVertical";   break;
+                case PATTERN_MEDIUM_GRAY    :   strPattern = "mediumGray";      break;
+                case PATTERN_NONE           :   strPattern = "none";            break;
+                case PATTERN_SOLID          :   strPattern = "solid";           break;
+            }
+            xmlw.Attr( "patternType", strPattern );
+            if( it->bgColor != "" ) xmlw.TagL( "bgColor" ).Attr( "rgb", it->bgColor ).EndL();
+            if( it->fgColor != "" ) xmlw.TagL( "fgColor" ).Attr( "rgb", it->fgColor ).EndL();
+            xmlw.End( "patternFill" ).End( "fill" );
+        }
+        xmlw.End( "fills" );
+    }
+
+    // ****************************************************************************
+    /// @brief  Appends borders section into styles file
+    /// @param  stream reference to xml stream
+    /// @return no
+    // ****************************************************************************
+    void CWorkbook::AddBorders( XMLWriter & xmlw ) const
+    {
+        const std::vector<Border> & borders = m_styleList.GetBorders();
+        xmlw.Tag( "borders" ).Attr( "count", borders.size() );
+        for( std::vector<Border>::const_iterator it = borders.begin(); it != borders.end(); it++ )
+        {
+            xmlw.Tag( "border" );
+            if( it->isDiagonalUp ) xmlw.Attr( "diagonalUp", 1 );
+            if( it->isDiagonalDown ) xmlw.Attr( "diagonalDown", 1 );
+            AddBorder( xmlw, "left", it->left );
+            AddBorder( xmlw, "right", it->right );
+            AddBorder( xmlw, "top", it->top );
+            AddBorder( xmlw, "bottom", it->bottom );
+            AddBorder( xmlw, "diagonal", it->diagonal );
+            xmlw.End( "border" );
+        }
+        xmlw.End( "borders" );
+    }
+
+    // ****************************************************************************
+    /// @brief  Appends border item section into borders set
+    /// @param  stream reference to xml stream
+    /// @param	borderName border name
+    /// @param	border style set
+    /// @return no
+    // ****************************************************************************
+    void CWorkbook::AddBorder( XMLWriter & xmlw, const char * borderName, Border::BorderItem border ) const
+    {
+        const char * sStyle = NULL;
+        switch( border.style )
+        {
+            case BORDER_THIN                :	sStyle = "thin";                break;
+            case BORDER_MEDIUM              :	sStyle = "medium";              break;
+            case BORDER_DASHED              :	sStyle = "dashed";              break;
+            case BORDER_DOTTED              :	sStyle = "dotted";              break;
+            case BORDER_THICK               :	sStyle = "thick";               break;
+            case BORDER_DOUBLE              :	sStyle = "double";              break;
+            case BORDER_HAIR                :	sStyle = "hair";                break;
+            case BORDER_MEDIUM_DASHED       :	sStyle = "mediumDashed";        break;
+            case BORDER_DASH_DOT            :	sStyle = "dashDot";             break;
+            case BORDER_MEDIUM_DASH_DOT     :	sStyle = "mediumDashDot";       break;
+            case BORDER_DASH_DOT_DOT        :	sStyle = "dashDotDot";          break;
+            case BORDER_MEDIUM_DASH_DOT_DOT :   sStyle = "mediumDashDotDot";    break;
+            case BORDER_SLANT_DASH_DOT      :   sStyle = "slantDashDot";        break;
+
+            case BORDER_NONE:
+                /*default:*/						break;
+        }
+        xmlw.Tag( borderName );
+        if( sStyle != NULL )
+        {
+            xmlw.Attr( "style", sStyle );
+            xmlw.Tag( "color" );
+            if( border.color != "" ) xmlw.Attr( "rgb", border.color );
+            else xmlw.Attr( "indexed", 64 );
+            xmlw.End( "color" );
+        }
+        xmlw.End( borderName );
+    }
+
+    void CWorkbook::AddFontInfo( XMLWriter & xmlw, const Font & font, const char * FontTagName, int32_t Charset ) const
+    {
+        int32_t attributes = font.attributes;
+        if( attributes & FONT_BOLD )        xmlw.TagL( "b" ).EndL();
+        if( attributes & FONT_ITALIC )      xmlw.TagL( "i" ).EndL();
+        if( attributes & FONT_UNDERLINED )  xmlw.TagL( "u" ).EndL();
+        if( attributes & FONT_STRIKE )      xmlw.TagL( "strike" ).EndL();
+        if( attributes & FONT_OUTLINE )     xmlw.TagL( "outline" ).EndL();
+        if( attributes & FONT_SHADOW )      xmlw.TagL( "shadow" ).EndL();
+        if( attributes & FONT_CONDENSE )    xmlw.TagL( "condense" ).EndL();
+        if( attributes & FONT_EXTEND )      xmlw.TagL( "extend" ).EndL();
+
+        xmlw.TagL( "sz" ).Attr( "val", font.size ).EndL();
+        xmlw.TagL( FontTagName ).Attr( "val", font.name ).EndL();
+        xmlw.TagL( "charset" ).Attr( "val", Charset ).EndL();
+        if( font.theme || ( font.color == "" ) ) xmlw.TagL( "color" ).Attr( "theme", 1 ).EndL();
+        else xmlw.TagL( "color" ).Attr( "rgb", font.color ).EndL();
+    }
+
+    // ****************************************************************************
+    /// @brief  ...
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::SaveChain()
+    {
+        // [- zip/xl/calcChain.xml
+        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/calcChain.xml" ) ) );
+        xmlw.Tag( "calcChain" ).Attr( "xmlns", ns_book );
+        for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
+        {
+            const CWorksheet * const Worksheet = * it;
+            if( Worksheet->IsThereFormula() )
+            {
+                std::vector<std::string> vstrChain;
+                Worksheet->GetCalcChain( vstrChain );
+                for( size_t j = 0; j < vstrChain.size(); j++ )
+                {
+                    xmlw.TagL( "c" );
+                    xmlw.Attr( "r", vstrChain[j] );
+                    if( j == 0 ) xmlw.Attr( "i", Worksheet->GetIndex() );
+                    xmlw.EndL();
+                }
+            }
+        }
+        xmlw.End( "calcChain" );
+        // zip/xl/calcChain.xml -]
+        return true;
+    }
+
+    // ****************************************************************************
+    /// @brief  ...
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::SaveComments()
+    {
+        if( m_comments.empty() ) return true;
+
+        std::vector<Comment *> sheet_comments;
+        std::vector<std::vector<Comment *> > comments;
+        std::sort( m_comments.begin(), m_comments.end() );
+
+        size_t active_sheet = m_comments[0].sheetIndex;
+        for( size_t i = 0; i < m_comments.size(); i++ )
+        {
+            if( m_comments[i].sheetIndex == active_sheet )
+            {
+                sheet_comments.push_back( &m_comments[i] );
+            }
+            else
+            {
+                active_sheet = m_comments[i].sheetIndex;
+                comments.push_back( sheet_comments );
+                sheet_comments.clear();
+
+                i--;
+            }
         }
 
-        _trmdir((m_temp_path + _T("/xl/worksheets")).c_str());
-    }
-    if (m_charts.empty() == false) {
-        _trmdir((m_temp_path + _T("/xl/charts")).c_str());
-        _trmdir((m_temp_path + _T("/xl/chartsheets/_rels")).c_str());
-        _trmdir((m_temp_path + _T("/xl/chartsheets")).c_str());
-        _trmdir((m_temp_path + _T("/xl/drawings/_rels")).c_str());
-        _trmdir((m_temp_path + _T("/xl/drawings")).c_str());
+        comments.push_back( sheet_comments );
+        sheet_comments.clear();
+        for( std::vector<std::vector<Comment *> >::const_iterator it = comments.begin(); it != comments.end(); it++ )
+            if( ! SaveCommentList( * it ) ) return false;
+        return true;
     }
 
-    _trmdir((m_temp_path + _T("/xl/_rels")).c_str());
-    _trmdir((m_temp_path + _T("/xl/theme")).c_str());
-    _trmdir((m_temp_path + _T("/xl")).c_str());
-    _trmdir((m_temp_path + _T("/docProps")).c_str());
-    _trmdir((m_temp_path + _T("/_rels")).c_str());
-    _trmdir(m_temp_path.c_str());
-}
+    // ****************************************************************************
+    /// @brief  ...
+    /// @param	comments comment list on the sheet
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::SaveCommentList( const std::vector<Comment *> & comments )
+    {
+        assert( ! comments.empty() );
+        {
+            // [- zip/xl/commentsN.xml
+            _tstringstream FileName;
+            FileName << _T( "/xl/comments" ) << comments[ 0 ]->sheetIndex << _T( ".xml" );
+
+            XMLWriter xmlw( m_pathManager->RegisterXML( FileName.str() ) );
+            xmlw.Tag( "comments" ).Attr( "xmlns", ns_book );
+            xmlw.Tag( "authors" ).TagOnlyContent( "author", m_UserName ).End().Tag( "commentList" );
+            for( std::vector<Comment *>::const_iterator it = comments.begin(); it != comments.end(); it++ )
+                AddComment( xmlw, * * it );
+            xmlw.End( "commentList" ).End( "comments" );
+            // zip/xl/commentsN.xml -]
+        }
+        {
+            // [- zip/xl/drawings/vmlDrawingN.xml
+            _tstringstream FileName;
+            FileName << _T( "/xl/drawings/vmlDrawing" ) << comments[ 0 ]->sheetIndex << _T( ".vml" );
+
+            XMLWriter xmlw( m_pathManager->RegisterXML( FileName.str() ) );
+            xmlw.Tag( "xml" ).Attr( "xmlns:v", "urn:schemas-microsoft-com:vml" );
+            xmlw.Attr( "xmlns:o", "urn:schemas-microsoft-com:office:office" );
+            xmlw.Attr( "xmlns:x", "urn:schemas-microsoft-com:office:excel" );
+            xmlw.Tag( "o:shapelayout" ).Attr( "v:ext", "edit" );
+            xmlw.TagL( "o:idmap" ).Attr( "v:ext", "edit" ).Attr( "data", 1 ).EndL();
+            xmlw.End( "o:shapelayout" );
+
+            xmlw.Tag( "v:shapetype" ).Attr( "id", "_x0000_t202" ).Attr( "coordsize", "21600,21600" );
+            xmlw.Attr( "o:spt", 202 ).Attr( "path", "m,l,21600r21600,l21600,xe" );
+            xmlw.TagL( "v:stroke" ).Attr( "joinstyle", "miter" ).EndL();
+            xmlw.TagL( "v:path" ).Attr( "gradientshapeok", "t" ).Attr( "o:connecttype", "rect" ).EndL();
+            xmlw.End( "v:shapetype" );
+
+            for( std::vector<Comment *>::const_iterator it = comments.begin(); it != comments.end(); it++ )
+                AddCommentDrawing( xmlw, * * it );
+            xmlw.End( "xml" );
+            // zip/xl/drawings/vmlDrawingN.xml -]
+        }
+        return true;
+    }
+
+    // ****************************************************************************
+    /// @brief  ...
+    /// @param  stream reference to xml stream
+    /// @param	comments comment list on the sheet
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    void CWorkbook::AddComment( XMLWriter & xmlw, const Comment & comment ) const
+    {
+        xmlw.Tag( "comment" ).Attr( "ref", comment.cellRef.ToString() ).Attr( "authorId", 0 ).Tag( "text" );
+        for( std::list<std::pair<Font, _tstring> >::const_iterator it = comment.contents.begin(); it != comment.contents.end(); it++ )
+        {
+            xmlw.Tag( "r" ).Tag( "rPr" );
+            AddFontInfo( xmlw, it->first, "rFont", 1 );
+            xmlw.End( "rPr" ).TagOnlyContent( "t", it->second ).End( "r" );
+        }
+        xmlw.End( "text" ).End( "comment" );
+    }
+
+    // ****************************************************************************
+    /// @brief  ...
+    /// @param  stream reference to xml stream
+    /// @param	comments comment list on the sheet
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    void CWorkbook::AddCommentDrawing( XMLWriter & xmlw, const Comment & comment )
+    {
+        _tstringstream IdValue, StyleValue;
+        IdValue << "_x0000_s" << 1000u + ( ++m_commLastId );
+
+        if( ( comment.x >= 0 ) && ( comment.y >= 0 ) && ( comment.width > 0 ) && ( comment.height > 0 ) )
+        {
+            StyleValue << "position:absolute; margin-left:" << comment.x << "pt;margin-top:" << comment.y;
+            StyleValue << "pt;width:" << comment.width << "pt;height:" << comment.height << "pt; z-index:2";
+        }
+        if( comment.isHidden ) StyleValue << ";visibility:hidden";
+
+        bool wrapText = false;
+        for( std::list<std::pair<Font, _tstring> >::const_iterator it = comment.contents.begin(); it != comment.contents.end(); it++ )
+            if( it->second.find( _T( "\n" ) ) != std::string::npos )
+            {
+                wrapText = true;
+                break;
+            }
+
+        if( wrapText ) StyleValue << ";mso-wrap-style:tight";
+
+        xmlw.Tag( "v:shape" ).Attr( "id", IdValue.str() ).Attr( "type", "#_x0000_t202" ).Attr( "style", StyleValue.str() );
+        /*             */xmlw.Attr( "fillcolor", comment.fillColor ).Attr( "o:insetmode", "auto" );
+        xmlw.TagL( "v:fill" ).Attr( "color2", comment.fillColor ).EndL();
+        xmlw.TagL( "v:shadow" ).Attr( "on", "t" ).Attr( "color", "black" ).Attr( "obscured", "t" ).EndL();
+        xmlw.TagL( "v:path" ).Attr( "o:connecttype", "none" ).EndL();
+
+        xmlw.Tag( "v:textbox" ).Attr( "style", "mso-direction-alt:auto" );
+        xmlw.TagL( "div" ).Attr( "style", "text-align:left" ).EndL();
+        xmlw.End( "v:textbox" );
+
+        xmlw.Tag( "x:ClientData" ).Attr( "ObjectType", "Note" );
+        xmlw.TagL( "x:MoveWithCells" ).EndL();
+        xmlw.TagL( "x:SizeWithCells" ).EndL();
+        xmlw.TagOnlyContent( "x:AutoFill", "False" );
+        xmlw.TagOnlyContent( "x:Row", comment.cellRef.row - 1 );
+        xmlw.TagOnlyContent( "x:Column", comment.cellRef.col );
+        xmlw.End( "x:ClientData" );
+
+        xmlw.End( "v:shape" );
+    }
+
+    // ****************************************************************************
+    /// @brief  ...
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::SaveSharedStrings()
+    {
+        // [- zip/xl/sharedStrings.xml
+        if( m_sharedStrings.empty() ) return true;
+
+        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/sharedStrings.xml" ) ) );
+        xmlw.Tag( "sst" ).Attr( "xmlns", ns_book ).Attr( "count", m_sharedStrings.size() ).Attr( "uniqueCount", m_sharedStrings.size() );
+
+        std::vector< std::pair<const std::string, uint64_t> *> pointers_to_hash;
+        pointers_to_hash.resize( m_sharedStrings.size() );
+        for( std::map<std::string, uint64_t>::iterator it = m_sharedStrings.begin(); it != m_sharedStrings.end(); it++ )
+            pointers_to_hash[it->second] = & ( * it );
+
+        std::vector< std::pair<const std::string, uint64_t> *>::const_iterator it = pointers_to_hash.begin();
+        for( ; it != pointers_to_hash.end(); it++ )
+            xmlw.Tag( "si" ).TagOnlyContent( "t", ( * it )->first ).End( "si" );
+
+        xmlw.End( "sst" );
+        // zip/xl/sharedStrings.xml -]
+        return true;
+    }
+
+    // ****************************************************************************
+    /// @brief  ...
+    /// @return Boolean result of the operation
+    // ****************************************************************************
+    bool CWorkbook::SaveWorkbook()
+    {
+        char szId[ 16 ] = { 0 };
+        {
+            // [- zip/xl/_rels/workbook.xml.rels
+            XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/_rels/workbook.xml.rels" ) ) );
+            xmlw.Tag( "Relationships" ).Attr( "xmlns", ns_relationships );
+
+            bool bFormula = false;
+            for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
+            {
+                sprintf( szId, "rId%zu", ( * it )->GetIndex() );
+                _tstringstream PropValue;
+                PropValue << "worksheets/sheet" << ( * it )->GetIndex() << ".xml";
+                xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_sheet ).Attr( "Target", PropValue.str() ).EndL();
+                if( ( * it )->IsThereFormula() ) bFormula = true;
+            }
+            for( std::vector<CChartsheet *>::const_iterator it = m_chartsheets.begin(); it != m_chartsheets.end(); it++ )
+            {
+                sprintf( szId, "rId%zu", ( * it )->GetIndex() );
+                _tstringstream PropValue;
+                PropValue << "chartsheets/sheet" << ( * it )->GetIndex() << ".xml";
+                xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_chartsheet ).Attr( "Target", PropValue.str() ).EndL();
+            }
+            size_t id = m_sheetId;
+            if( bFormula )
+            {
+                sprintf( szId, "rId%zu", id++ );
+                xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_chain ).Attr( "Target", "calcChain.xml" ).EndL();
+            }
+            if( ! m_sharedStrings.empty() )
+            {
+                sprintf( szId, "rId%zu", id++ );
+                xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_sharedStr ).Attr( "Target", "sharedStrings.xml" ).EndL();
+            }
+            sprintf( szId, "rId%zu", id++ );
+            xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_style ).Attr( "Target", "styles.xml" ).EndL();
+            sprintf( szId, "rId%zu", id++ );
+            xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_theme ).Attr( "Target", "theme/theme1.xml" ).EndL();
+
+            xmlw.End( "Relationships" );
+            // zip/xl/_rels/workbook.xml.rels -]
+        }
+        {
+            // [- zip/xl/workbook.xml
+            XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/workbook.xml" ) ) );
+            xmlw.Tag( "workbook" ).Attr( "xmlns", ns_book ).Attr( "xmlns:r", ns_book_r );
+            xmlw.TagL( "fileVersion" ).Attr( "appName", "xl" ).Attr( "lastEdited", 5 );
+            /*                  */xmlw.Attr( "lowestEdited", 5 ).Attr( "rupBuild", 9303 ).EndL();
+            xmlw.TagL( "workbookPr" ).Attr( "codeName", "ThisWorkbook" ).Attr( "defaultThemeVersion", 124226 ).EndL();
+            xmlw.Tag( "bookViews" );
+            xmlw.TagL( "workbookView" ).Attr( "xWindow", 270 ).Attr( "yWindow", 630 );
+            /*                   */xmlw.Attr( "windowWidth", 24615 ).Attr( "windowHeight", 11445 );
+            /*                   */xmlw.Attr( "activeTab", m_activeSheetIndex < m_sheetId - 1 ? m_activeSheetIndex : 0 ).EndL();
+            xmlw.End( "bookViews" );
+
+            if( ! m_worksheets.empty() || ! m_chartsheets.empty() )
+            {
+                xmlw.Tag( "sheets" );
+                //Sheets ordering
+                for( size_t i = 1; i < m_sheetId; i++ )
+                {
+                    sprintf( szId, "rId%zu", i );
+                    bool Found = false;
+                    for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
+                        if( i == ( * it )->GetIndex() )
+                        {
+                            Found = true;
+                            xmlw.TagL( "sheet" ).Attr( "name", ( * it )->GetTitle() ).Attr( "sheetId", i ).Attr( "r:id", szId ).EndL();
+                            break;
+                        }
+                    if( Found ) continue;
+                    for( std::vector<CChartsheet *>::const_iterator it = m_chartsheets.begin(); it != m_chartsheets.end(); it++ )
+                        if( i == ( * it )->GetIndex() )
+                        {
+                            xmlw.TagL( "sheet" ).Attr( "name", ( * it )->Chart().GetTitle() ).Attr( "sheetId", i ).Attr( "r:id", szId ).EndL();
+                            break;
+                        }
+                }
+                xmlw.End( "sheets" );
+            }
+            else return false;
+            xmlw.TagL( "calcPr" ).Attr( "calcId", 124519 ).EndL().End( "workbook" );
+            // zip/xl/workbook.xml -]
+        }
+        return true;
+    }
 
 }	// namespace SimpleXlsx

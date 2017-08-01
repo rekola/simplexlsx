@@ -108,7 +108,14 @@ typedef	wchar_t	TCHAR;
 #define	_tcsstr		wcsstr
 #define	_tcstok		wcstok
 #define	_tcsdup		_wcsdup
+
+#ifdef _WIN32
 #define	_tcsicmp	_wcsicmp
+#else
+#define	_tcsicmp	wcscmp
+#endif
+
+
 #define	_tcsnicmp	_wcsnicmp
 #define	_tcsnset		_wcsnset
 #define	_tcsrev		_wcsrev
@@ -135,10 +142,21 @@ typedef	wchar_t	TCHAR;
 #define	_ttoi		_wtoi
 #define	_tcsftime	wcsftime
 
+#ifdef _WIN32
+
 #define _tmkdir     _wmkdir
 #define _trmdir     _wrmdir
 #define _tremove    _wremove
 #define _tgetenv    _wgetenv
+
+#else
+
+#define _tmkdir     mkdir
+#define _trmdir     rmdir
+#define _tremove    remove
+#define _tgetenv    getenv
+
+#endif
 
 #else	/* Not _UNICODE */
 

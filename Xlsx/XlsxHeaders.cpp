@@ -27,65 +27,67 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-#ifdef _WIN32
-#include <tchar.h>
-#else
-#include "../tchar.h"
-#endif  // _WIN32
+#include "XlsxHeaders.h"
 
-const TCHAR *ns_content_types	= _T("http://schemas.openxmlformats.org/package/2006/content-types");
-const TCHAR *content_printer 	= _T("application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings");
-const TCHAR *content_rels 		= _T("application/vnd.openxmlformats-package.relationships+xml");
-const TCHAR *content_xml 		= _T("application/xml");
-const TCHAR *content_book 		= _T("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml");
-const TCHAR *content_sheet 		= _T("application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
-const TCHAR *content_theme 		= _T("application/vnd.openxmlformats-officedocument.theme+xml");
-const TCHAR *content_styles 	= _T("application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml");
-const TCHAR *content_sharedStr 	= _T("application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml");
-const TCHAR *content_comment	= _T("application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml");
-const TCHAR *content_vml		= _T("application/vnd.openxmlformats-officedocument.vmlDrawing");
-const TCHAR *content_core 		= _T("application/vnd.openxmlformats-package.core-properties+xml");
-const TCHAR *content_app 		= _T("application/vnd.openxmlformats-officedocument.extended-properties+xml");
-const TCHAR *content_chart      = _T("application/vnd.openxmlformats-officedocument.drawingml.chart+xml");
-const TCHAR *content_drawing    = _T("application/vnd.openxmlformats-officedocument.drawing+xml");
-const TCHAR *content_chartsheet = _T("application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml");
-const TCHAR *content_chain      = _T("application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml");
+namespace SimpleXlsx
+{
+    const char * ns_content_types   = "http://schemas.openxmlformats.org/package/2006/content-types";
+    const char * content_printer 	= "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
+    const char * content_rels 		= "application/vnd.openxmlformats-package.relationships+xml";
+    const char * content_xml 		= "application/xml";
+    const char * content_book 		= "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
+    const char * content_sheet 		= "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
+    const char * content_theme 		= "application/vnd.openxmlformats-officedocument.theme+xml";
+    const char * content_styles     = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
+    const char * content_sharedStr 	= "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
+    const char * content_comment    = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
+    const char * content_vml        = "application/vnd.openxmlformats-officedocument.vmlDrawing";
+    const char * content_core 		= "application/vnd.openxmlformats-package.core-properties+xml";
+    const char * content_app 		= "application/vnd.openxmlformats-officedocument.extended-properties+xml";
+    const char * content_chart      = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+    const char * content_drawing    = "application/vnd.openxmlformats-officedocument.drawing+xml";
+    const char * content_chartsheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml";
+    const char * content_chain      = "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml";
 
-const TCHAR *ns_relationships	= _T("http://schemas.openxmlformats.org/package/2006/relationships");
-const TCHAR *type_book			= _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument");
-const TCHAR *type_core			= _T("http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties");
-const TCHAR *type_app			= _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties");
+    const char * ns_markup_compatibility    = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    const char * ns_c14                     = "http://schemas.microsoft.com/office/drawing/2007/8/2/chart";
+    const char * ns_relationships_chart     = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
-const TCHAR *ns_cp				= _T("http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
-const TCHAR *ns_dc				= _T("http://purl.org/dc/elements/1.1/");
-const TCHAR *ns_dcterms			= _T("http://purl.org/dc/terms/");
-const TCHAR *ns_dcmitype		= _T("http://purl.org/dc/dcmitype/");
-const TCHAR *ns_xsi				= _T("http://www.w3.org/2001/XMLSchema-instance");
+    const char * ns_relationships	= "http://schemas.openxmlformats.org/package/2006/relationships";
+    const char * type_book			= "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
+    const char * type_core			= "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+    const char * type_app			= "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
 
-const TCHAR *xsi_type			= _T("dcterms:W3CDTF");
+    const char * ns_cp				= "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+    const char * ns_dc				= "http://purl.org/dc/elements/1.1/";
+    const char * ns_dcterms			= "http://purl.org/dc/terms/";
+    const char * ns_dcmitype        = "http://purl.org/dc/dcmitype/";
+    const char * ns_xsi				= "http://www.w3.org/2001/XMLSchema-instance";
+    const char * xsi_type			= "dcterms:W3CDTF";
 
-const TCHAR *ns_doc_prop		= _T("http://schemas.openxmlformats.org/officeDocument/2006/extended-properties");
-const TCHAR *ns_vt				= _T("http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
+    const char * ns_doc_prop		= "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
+    const char * ns_vt				= "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
 
-const TCHAR *ns_book			= _T("http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-const TCHAR *ns_book_r			= _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+    const char * ns_book			= "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    const char * ns_book_r			= "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
-const TCHAR *ns_mc				= _T("http://schemas.openxmlformats.org/markup-compatibility/2006");
-const TCHAR *ns_x14ac			= _T("http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac");
+    const char * ns_mc				= "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    const char * ns_x14ac			= "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac";
 
-const TCHAR *ns_x14				= _T("http://schemas.microsoft.com/office/spreadsheetml/2009/9/main");
+    const char * ns_x14				= "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
 
-const TCHAR *type_comments		= _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments");
-const TCHAR *type_vml			= _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing");
-const TCHAR *type_sheet			= _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
-const TCHAR *type_style			= _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles");
-const TCHAR *type_sharedStr		= _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings");
-const TCHAR *type_theme			= _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme");
-const TCHAR *type_chain         = _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain");
-const TCHAR *type_chartsheet    = _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet");
-const TCHAR *type_chart         = _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart");
-const TCHAR *type_drawing       = _T("http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing");
+    const char * type_comments		= "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+    const char * type_vml			= "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+    const char * type_sheet			= "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+    const char * type_style			= "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+    const char * type_sharedStr		= "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
+    const char * type_theme			= "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+    const char * type_chain         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
+    const char * type_chartsheet    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
+    const char * type_chart         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+    const char * type_drawing       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
 
-const TCHAR *ns_a				= _T("http://schemas.openxmlformats.org/drawingml/2006/main");
-const TCHAR *ns_c               = _T("http://schemas.openxmlformats.org/drawingml/2006/chart");
-const TCHAR *ns_xdr             = _T("http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing");
+    const char * ns_a				= "http://schemas.openxmlformats.org/drawingml/2006/main";
+    const char * ns_c               = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    const char * ns_xdr             = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+}

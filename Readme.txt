@@ -1,10 +1,29 @@
-2013-09-01 Version 0.20
+2017-05-09 Version 0.23
 	Change log:
-		- Bug fix (SaveStyles and GetFormatCodeString methods fixed)
+		- Improved scatter charts to more "scientific" appearance, including color and symbol selection and width of the lines (thanks for this to E.Naumovich).
+		- Creating charts in the worksheets by CWorkbook::AddChart. For chart sheets must be used CWorkbook::AddChartSheet (thanks for idea to Aso).
+		- Now the sheets are arranged in order of creation. Using CWorkbook::SetActiveSheet can be set the active sheet (by default the first sheet).
+		- CWorkbook::m_styleList was moved to private. Now must be used CWorkbook::AddStyle() and CWorkbook::GetFonts().
+		- Many internal changes.
+		- Added examples to the archive.
 
-2013-05-05 Version 0.19 update
+2017-02-22 Version 0.22
 	Change log:
-		- License headers were added (BSD "3-clause license")
+		- Support for the TDM-GCC 64-bit compiler (thanks to Eduardo Baena).
+		- Minor bug fixes.
+2017-01-28 Version 0.21
+	Change log:
+		- XmlWriter is rewritten to work with Unicode, implemented writing of strings in UTF-8.
+		- Rewrote all the code to work with the new XmlWriter. All string constants for XML stored in the type const char *, which allows speed up the work and reduce the size of the executable file for the Unicode version.
+		- Minimal use _stprintf functions, which is replaced by _tstringstream for the safety (no fixed buffer length).
+		- Fixed bugs in the charts module, because of what Excel can not open the file or display it correctly. Compatibility is also upgraded to Office 2010 because of the charts.
+		- For fields valAxisFrom and valAxisTo (from CChartsheet::Series) made standard numbering for rows (from 1)
+		- For CWorkbook you can specify the name of the author. If not specified, the current user name is queried from the Operation system.
+		- Many functions AddCell of the CWorksheet class can take the "raw" data without the need to create wrapper classes (for example, without CellDataStr or CellDataInt).
+
+2013-08-31 Version 0.20
+	Change log:
+		- Minor bug fixes
 
 2013-04-13 Version 0.19
 	Change log:
