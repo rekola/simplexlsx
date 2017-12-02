@@ -82,6 +82,7 @@ namespace SimpleXlsx
 
             CWorksheet & InitWorkSheet( CWorksheet * sheet, const _tstring & title );
             CDrawing * CreateDrawing();
+            _tstring NormalizeSheetName( const _tstring & title );
 
             bool SaveCore();
             bool SaveContentType();

@@ -1,3 +1,7 @@
+2017-12-02 Version 0.24
+	Change log:
+		- Added checking of sheet names: length up to 31 characters and forbidden characters "/\[]*:?" are replaced with '_' (Excel restrictions)
+
 2017-05-09 Version 0.23
 	Change log:
 		- Improved scatter charts to more "scientific" appearance, including color and symbol selection and width of the lines (thanks for this to E.Naumovich).
@@ -11,6 +15,7 @@
 	Change log:
 		- Support for the TDM-GCC 64-bit compiler (thanks to Eduardo Baena).
 		- Minor bug fixes.
+
 2017-01-28 Version 0.21
 	Change log:
 		- XmlWriter is rewritten to work with Unicode, implemented writing of strings in UTF-8.

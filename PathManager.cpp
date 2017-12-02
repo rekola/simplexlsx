@@ -1,6 +1,6 @@
 #include <algorithm>
-
-#include <errno.h>
+#include <cerrno>
+#include <cstring>
 
 #include "PathManager.hpp"
 

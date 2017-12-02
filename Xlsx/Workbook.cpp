@@ -214,7 +214,7 @@ namespace SimpleXlsx
     CChartsheet & CWorkbook::AddChartSheet( const _tstring & title, EChartTypes type )
     {
         CChart * chart = new CChart( m_charts.size() + 1, type, * m_pathManager );
-        chart->SetTitle( title );
+        chart->SetTitle( NormalizeSheetName( title ) );
         m_charts.push_back( chart );
 
         CDrawing * drawing = CreateDrawing();
@@ -274,7 +274,7 @@ namespace SimpleXlsx
 
     CWorksheet & CWorkbook::InitWorkSheet( CWorksheet * sheet, const _tstring & title )
     {
-        sheet->SetTitle( title );
+        sheet->SetTitle( NormalizeSheetName( title ) );
         sheet->SetSharedStr( & m_sharedStrings );
         sheet->SetComments( & m_comments );
         m_worksheets.push_back( sheet );
@@ -286,6 +286,21 @@ namespace SimpleXlsx
         CDrawing * drawing = new CDrawing( m_drawings.size() + 1, * m_pathManager );
         m_drawings.push_back( drawing );
         return drawing;
+    }
+
+    _tstring CWorkbook::NormalizeSheetName( const _tstring & title )
+    {
+        _tstring Result = title;
+        for( _tstring::iterator it = Result.begin(); it != Result.end(); it++ )
+            if( ( * it == _T( '\\' ) ) || ( * it == _T( '/' ) ) ||
+                ( * it == _T( '[' ) )  || ( * it == _T( ']' ) ) ||
+                ( * it == _T( '*' ) )  || ( * it == _T( ':' ) ) ||
+                ( * it == _T( '?' ) ) )
+            {
+                Result.replace( it, it + 1, 1, _T( '_' ) );
+            }
+        if( Result.length() > 31 ) Result.resize( 31 ); // 31 - is a max length of sheet name
+        return Result;
     }
 
     // ****************************************************************************
