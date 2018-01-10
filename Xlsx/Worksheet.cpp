@@ -200,7 +200,13 @@ namespace SimpleXlsx
             }
             m_XMLWriter->End( "c" );
         }
-
+        ///  empty cell with style   ---
+        else if( style_id != 0 )
+        {
+            const std::string & szCoord = CellCoord( m_row_index, m_offset_column + m_current_column ).ToString();
+            m_XMLWriter->Tag( "c" ).Attr( "r", szCoord ).Attr( "s", style_id ).End( "c" );
+        };
+        ///  empty cell with style   ---
         m_current_column++;
     }
 
@@ -312,18 +318,19 @@ namespace SimpleXlsx
         m_XMLWriter->TagL( "pageSetup" ).Attr( "paperSize", 9 ).Attr( "orientation", sOrient ).EndL();  // A4 paper size
 
         size_t rId = 1;
-        if( m_withComments )
-        {
-            m_XMLWriter->TagL( "legacyDrawing" ).Attr( "r:id", "rId1" ).EndL();
-            rId += 2;
-        }
-
         if( ! m_Drawing.IsEmpty() )
         {
             _tstringstream rIdStream;
-            rIdStream << "rId" << m_Drawing.GetIndex();
+            rIdStream << "rId" << rId;
             m_XMLWriter->TagL( "drawing" ).Attr( "r:id", rIdStream.str() ).EndL();
             rId++;
+        }
+        if( m_withComments )
+        {
+            _tstringstream rIdStream;
+            rIdStream << "rId" << rId;
+            m_XMLWriter->TagL( "legacyDrawing" ).Attr( "r:id", rIdStream.str() ).EndL();
+            rId += 2;
         }
 
         m_XMLWriter->End( "worksheet" );
@@ -351,21 +358,24 @@ namespace SimpleXlsx
         XMLWriter xmlw( m_pathManager.RegisterXML( FileName.str() ) );
         xmlw.Tag( "Relationships" ).Attr( "xmlns", ns_relationships );
         size_t rId = 1;
-        if( m_withComments )
-        {
-            _tstringstream Vml, Comments;
-            Vml << "../drawings/vmlDrawing" << m_index << ".vml";
-            Comments << "../comments" << m_index << ".xml";
-            xmlw.TagL( "Relationship" ).Attr( "Id", "rId1" ).Attr( "Type", type_vml ).Attr( "Target", Vml.str() ).EndL();
-            xmlw.TagL( "Relationship" ).Attr( "Id", "rId2" ).Attr( "Type", type_comments ).Attr( "Target", Comments.str() ).EndL();
-            rId += 2;
-        }
         if( ! m_Drawing.IsEmpty() )
         {
             _tstringstream rIdStream, Drawing;
-            rIdStream << "rId" << m_Drawing.GetIndex();
+            rIdStream << "rId" << rId;
             Drawing << "../drawings/drawing" << m_index << ".xml";
             xmlw.TagL( "Relationship" ).Attr( "Id", rIdStream.str() ).Attr( "Type", type_drawing ).Attr( "Target", Drawing.str() ).EndL();
+            rId++;
+        }
+        if( m_withComments )
+        {
+            _tstringstream Vml, Comments, rIdVml, rIdComments;
+            Vml << "../drawings/vmlDrawing" << m_index << ".vml";
+            Comments << "../comments" << m_index << ".xml";
+            rIdVml << "rId" << rId;
+            rIdComments << "rId" << rId + 1;
+            rId += 2;
+            xmlw.TagL( "Relationship" ).Attr( "Id", rIdVml.str() ).Attr( "Type", type_vml ).Attr( "Target", Vml.str() ).EndL();
+            xmlw.TagL( "Relationship" ).Attr( "Id", rIdComments.str() ).Attr( "Type", type_comments ).Attr( "Target", Comments.str() ).EndL();
         }
 
         xmlw.End( "Relationships" );

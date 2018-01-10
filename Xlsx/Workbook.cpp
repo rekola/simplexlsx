@@ -143,6 +143,8 @@ namespace SimpleXlsx
             delete * it;
         for( std::vector<CDrawing *>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++ )
             delete * it;
+        for( std::vector<CImage *>::const_iterator it = m_images.begin(); it != m_images.end(); it++ )
+            delete * it;
 
         delete m_pathManager;
     }
@@ -197,7 +199,14 @@ namespace SimpleXlsx
         return InitWorkSheet( sheet, title );
     }
 
-    CChart & CWorkbook::AddChart( CWorksheet & sheet, ChartPoint TopLeft, ChartPoint BottomRight, EChartTypes type )
+    // ****************************************************************************
+    /// @brief  Adds another chart into the existing worksheet
+    /// @param  sheet existing worksheet
+    /// @param  TopLeft top left point for the chart
+    /// @param  BottomRight bottom right point for the chart
+    /// @return Reference to a newly created object
+    // ****************************************************************************
+    CChart & CWorkbook::AddChart( CWorksheet & sheet, DrawingPoint TopLeft, DrawingPoint BottomRight, EChartTypes type )
     {
         CChart * chart = new CChart( m_charts.size() + 1, type, * m_pathManager );
         m_charts.push_back( chart );
@@ -224,6 +233,43 @@ namespace SimpleXlsx
         m_chartsheets.push_back( chartsheet );
 
         return * chartsheet;
+    }
+
+    // ****************************************************************************
+    /// @brief  Adds image into the data sheet. Supported image formats: gif, jpg, png, tif.
+    /// @brief  If the same image is added several times, then in XLSX will be copied only once.
+    /// @param  sheet existing worksheet
+    /// @param  filename path to the image file
+    /// @param  TopLeft top left point for the chart
+    /// @param  BottomRight bottom right point for the chart
+    /// @return True if success. False if the file is unavailable or the format does not supported.
+    // ****************************************************************************
+    bool CWorkbook::AddImage( CWorksheet & sheet, const _tstring & filename, DrawingPoint TopLeft, DrawingPoint BottomRight )
+    {
+        CImage * image = CreateImage( filename );
+        if( image != NULL )
+        {
+            sheet.m_Drawing.AppendImage( image, TopLeft, BottomRight );
+        }
+        return image != NULL;
+    }
+    // ****************************************************************************
+    /// @brief  Adds image into the data sheet. Supported image formats (file extension): gif, jpg, jpeg, png, tif, tiff.
+    /// @brief  If the same image is added several times, then in XLSX will be copied only once.
+    /// @param  sheet existing worksheet
+    /// @param  filename path to the image file
+    /// @param  TopLeft top left point for the chart
+    /// @param  XScale the scale along the X-axis, in percent
+    /// @param  YScale the scale along the Y-axis, in percent
+    /// @return True if success. False if the file is unavailable or the format does not supported.
+    bool CWorkbook::AddImage( CWorksheet & sheet, const _tstring & filename, DrawingPoint TopLeft, uint16_t XScale, uint16_t YScale )
+    {
+        CImage * image = CreateImage( filename );
+        if( image != NULL )
+        {
+            sheet.m_Drawing.AppendImage( image, TopLeft, XScale, YScale );
+        }
+        return image != NULL;
     }
 
     // ****************************************************************************
@@ -288,14 +334,208 @@ namespace SimpleXlsx
         return drawing;
     }
 
+    //Reverse for other byte order
+    static inline uint16_t ReverseUInt16( const uint16_t * Value )
+    {
+        const uint8_t * Ptr = reinterpret_cast< const uint8_t * >( Value );
+        return ( uint16_t( Ptr[ 0 ] ) << 8 ) | Ptr[ 1 ];
+    }
+    static inline uint32_t ReverseUInt32( const uint32_t * Value )
+    {
+        const uint8_t * Ptr = reinterpret_cast< const uint8_t * >( Value );
+        return ( uint32_t( Ptr[ 0 ] ) << 24 ) | ( uint32_t( Ptr[ 1 ] ) << 16 ) | ( uint32_t( Ptr[ 2 ] ) << 8 ) | Ptr[ 3 ];
+    }
+    static bool GetDimensionFromGIF( std::ifstream & fstream, uint16_t & Width, uint16_t & Height )
+    {
+        const uint8_t BufSize = 10;
+        char Buf[ BufSize ];
+        fstream.read( Buf, BufSize );
+        Width = * reinterpret_cast< uint16_t * >( & Buf[ 6 ] );
+        Height = * reinterpret_cast< uint16_t * >( & Buf[ 8 ] );
+        return ( fstream.gcount() == BufSize ) && ( Buf[ 0 ] == 'G' ) && ( Buf[ 1 ] == 'I' ) && ( Buf[ 2 ] == 'F' );
+    }
+    static bool GetDimensionFromJPEG( std::ifstream & fstream, uint16_t & Width, uint16_t & Height )
+    {
+        //See: http://vip.sugovica.hu/Sardi/kepnezo/JPEG%20File%20Layout%20and%20Format.htm
+        const uint8_t BufSize = 7;
+        char Buf[ BufSize ];
+        //Header
+        fstream.read( Buf, 2 );
+        if( ( fstream.gcount() != 2 ) || ( Buf[ 0 ] != char( 0xFF ) ) || ( Buf[ 1 ] != char( 0xD8 ) ) )
+            return false;
+        //Search SOF0 (Start Of Frame 0) marker in segments
+        const uint8_t SegmentHeaderSize = 2 * sizeof( uint8_t ) + sizeof( uint16_t );
+        while( ! fstream.eof() )
+        {
+            fstream.read( Buf, SegmentHeaderSize );
+            if( ( fstream.gcount() != SegmentHeaderSize ) || ( Buf[ 0 ] != char( 0xFF ) ) ) //EOF or invalid marker
+                return false;
+            if( Buf[ 1 ] == char( 0xC0 ) )
+            {
+                const uint8_t ElapsedSegmentSize = sizeof( uint8_t ) + 2 * sizeof( uint16_t );
+                fstream.read( Buf, ElapsedSegmentSize );
+                Width = ReverseUInt16( reinterpret_cast< uint16_t * >( & Buf[ 3 ] ) );
+                Height = ReverseUInt16( reinterpret_cast< uint16_t * >( & Buf[ 1 ] ) );
+                return fstream.gcount() == ElapsedSegmentSize;
+            }
+            else    //To next segment
+            {
+                uint16_t SegmentSize = ReverseUInt16( reinterpret_cast< uint16_t * >( & Buf[ 2 ] ) );
+                assert( SegmentSize > sizeof( SegmentSize ) );
+                fstream.seekg( SegmentSize - sizeof( SegmentSize ), fstream.cur );  //SegmentSize includes self size
+            }
+        }
+        return false;
+    }
+    static bool GetDimensionFromPNG( std::ifstream & fstream, uint16_t & Width, uint16_t & Height )
+    {
+        const uint8_t ValidHeaderSize = 8 + 8;
+        static const char ValidHeader[ ValidHeaderSize ] = { char( 0x89 ), 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A,
+                                                             0x00, 0x00, 0x00, 0x0D, 'I', 'H', 'D', 'R'
+                                                           };
+        const uint8_t BufSize = 8 + 8 + 8;  // Header + IHDR section name + dimension
+        char Buf[ BufSize ];
+        fstream.read( Buf, BufSize );
+        if( ( fstream.gcount() != BufSize ) || ( strncmp( Buf, ValidHeader, ValidHeaderSize ) != 0 ) )
+            return false;
+        const uint32_t TmpWidth = ReverseUInt32( reinterpret_cast< uint32_t * >( & Buf[ 16 ] ) );
+        const uint32_t TmpHeight = ReverseUInt32( reinterpret_cast< uint32_t * >( & Buf[ 20 ] ) );
+        Width = uint16_t( TmpWidth );
+        Height = uint16_t( TmpHeight );
+        return ( TmpWidth <= 0xFFFF ) && ( TmpHeight <= 0xFFFF );
+    }
+    static bool GetDimensionFromTIFF( std::ifstream & fstream, uint16_t & Width, uint16_t & Height )
+    {
+        //See: http://www.fileformat.info/format/tiff/corion.htm
+        const uint8_t BufSize = 16;
+        char Buf[ BufSize ];
+        fstream.read( Buf, 8 );
+        if( fstream.gcount() != 8 )
+            return false;
+        bool NeedReverse = false;
+        if( ( Buf[ 0 ] == 'I' ) && ( Buf[ 1 ] == 'I' ) && ( Buf[ 2 ] == 42 )  && ( Buf[ 3 ] == 0 ) )        //Intel byte order
+            NeedReverse = false;
+        else if( ( Buf[ 0 ] == 'M' ) && ( Buf[ 1 ] == 'M' ) && ( Buf[ 2 ] == 0 )  && ( Buf[ 3 ] == 42 ) )   //Motorola byte order
+            NeedReverse = true;
+        else return false;  //Wrong format
+        //Process file - search dimension
+        uint32_t DirOffset = * reinterpret_cast< uint32_t * >( & Buf[ 4 ] );
+        while( true )
+        {
+            fstream.seekg( NeedReverse ? ReverseUInt32( & DirOffset ) : DirOffset );    //Seek to image file directory
+            uint16_t EntryNum;  //Number of entries
+            fstream.read( reinterpret_cast< char * >( & EntryNum ), sizeof( EntryNum ) );
+            if( fstream.gcount() != sizeof( EntryNum ) )
+                return false;
+            if( NeedReverse )
+                EntryNum = ReverseUInt16( & EntryNum );
+            int Counter = 0;
+            for( int i = 0; i < EntryNum; i++ )
+            {
+                const uint8_t FieldSize = 2 * sizeof( uint16_t ) + 2 * sizeof( uint32_t );
+                fstream.read( Buf, FieldSize );
+                if( fstream.gcount() != FieldSize )
+                    return false;
+                uint16_t Tag = * reinterpret_cast< uint16_t * >( & Buf[ 0 ] );      //Field tag
+                uint32_t Offset = * reinterpret_cast< uint32_t * >( & Buf[ 8 ] );   //Data offset of the field
+                if( NeedReverse )
+                {
+                    Tag = ReverseUInt16( & Tag );
+                    Offset = ReverseUInt32( &Offset );
+                }
+                if( Tag == 0x0100 )         //ImageWidth
+                {
+                    assert( Offset <= 0xFFFF );
+                    if( Offset <= 0xFFFF )
+                        Width = uint16_t( Offset );
+                    if( ++Counter == 2 )        //Width and height found
+                        return true;
+                }
+                else if( Tag == 0x0101 )    //ImageLength
+                {
+                    assert( Offset <= 0xFFFF );
+                    if( Offset <= 0xFFFF )
+                        Height = uint16_t( Offset );
+                    if( ++Counter == 2 )        //Width and height found
+                        return true;
+                }
+            }
+            //Possible exist next image file directory.
+            //Offset of next IFD in file, 0 if none follow.
+            fstream.read( reinterpret_cast< char * >( & DirOffset ), sizeof( DirOffset ) );
+            if( NeedReverse )
+                DirOffset = ReverseUInt32( & DirOffset );
+            if( ( fstream.gcount() != sizeof( DirOffset ) ) || ( DirOffset == 0 ) )
+                return false;
+        }
+        return false;
+    }
+    struct TSupportedImages // Supported image files
+    {
+        _tstring            FileExt;
+        CImage::ImageType   ImageType;
+        bool ( * FuncPtr )( std::ifstream &, uint16_t &, uint16_t & );
+    };
+    static const TSupportedImages KnownExt[] =
+    {
+        { _T( ".gif" ),     CImage::gif,    & GetDimensionFromGIF   },
+        { _T( ".jpg" ),     CImage::jpg,    & GetDimensionFromJPEG  },
+        { _T( ".jpeg" ),    CImage::jpeg,   & GetDimensionFromJPEG  },
+        { _T( ".png" ),     CImage::png,    & GetDimensionFromPNG   },
+        { _T( ".tif" ),     CImage::tif,    & GetDimensionFromTIFF  },
+        { _T( ".tiff" ),    CImage::tiff,   & GetDimensionFromTIFF  },
+        { _T( "" ),         CImage::unknown, NULL }
+    };
+
+    CImage * CWorkbook::CreateImage( const _tstring & filename )
+    {
+        CImage * image = NULL;
+        for( std::vector< CImage * >::const_iterator it = m_images.begin(); it != m_images.end(); it++ )
+            if( ( * it )->LocalPath == filename )
+            {
+                image = * it;
+                break;
+            }
+        if( image == NULL ) //New image
+        {
+            size_t LastPoint = filename.find_last_of( _T( '.' ) );
+            if( LastPoint == filename.npos )    //No extension
+                return NULL;
+            _tstring Ext = filename.substr( LastPoint );
+            std::transform( Ext.begin(), Ext.end(), Ext.begin(), ::tolower );
+            std::ifstream imfile( PathManager::PathEncode( filename ).c_str(), std::ios::binary );
+            if( ! imfile.is_open() )            //File not exist or busy
+                return NULL;
+            //Check for correct extension and format, extract image dimension
+            uint16_t ImWidth = 0, ImHeight = 0;
+            const TSupportedImages * Ptr = KnownExt;
+            while( ( Ptr->ImageType != CImage::unknown ) && ( Ptr->FileExt != Ext ) )
+                Ptr++;
+            if( ( Ptr->ImageType == CImage::unknown ) || ! Ptr->FuncPtr( imfile, ImWidth, ImHeight )
+                    || ( ImWidth == 0 ) || ( ImHeight == 0 ) )
+                return NULL;
+
+            _tstringstream IntFileName;
+            IntFileName << _T( "image" ) << m_images.size() + 1 << Ext;
+            image = new CImage( filename, IntFileName.str(), Ptr->ImageType, ImWidth, ImHeight );
+            if( ! m_pathManager->RegisterImage( filename, _T( "/xl/media/" ) + image->InternalName ) )
+            {
+                delete image;
+                return NULL;
+            }
+            else m_images.push_back( image );   //File successfully copied to temporary folder
+        }
+        return image;
+    }
+
     _tstring CWorkbook::NormalizeSheetName( const _tstring & title )
     {
         _tstring Result = title;
         for( _tstring::iterator it = Result.begin(); it != Result.end(); it++ )
             if( ( * it == _T( '\\' ) ) || ( * it == _T( '/' ) ) ||
-                ( * it == _T( '[' ) )  || ( * it == _T( ']' ) ) ||
-                ( * it == _T( '*' ) )  || ( * it == _T( ':' ) ) ||
-                ( * it == _T( '?' ) ) )
+                    ( * it == _T( '[' ) )  || ( * it == _T( ']' ) ) ||
+                    ( * it == _T( '*' ) )  || ( * it == _T( ':' ) ) ||
+                    ( * it == _T( '?' ) ) )
             {
                 Result.replace( it, it + 1, 1, _T( '_' ) );
             }
@@ -351,6 +591,7 @@ namespace SimpleXlsx
         xmlw.Tag( "Types" ).Attr( "xmlns", ns_content_types );
         xmlw.TagL( "Default" ).Attr( "Extension", "rels" ).Attr( "ContentType", content_rels ).EndL();
         xmlw.TagL( "Default" ).Attr( "Extension", "xml" ).Attr( "ContentType", content_xml ).EndL();
+        AddImagesExtensions( xmlw );
         xmlw.TagL( "Override" ).Attr( "PartName", "/xl/workbook.xml" ).Attr( "ContentType", content_book ).EndL();
 
         bool bFormula = false;
@@ -1047,6 +1288,28 @@ namespace SimpleXlsx
         xmlw.TagL( "charset" ).Attr( "val", Charset ).EndL();
         if( font.theme || ( font.color == "" ) ) xmlw.TagL( "color" ).Attr( "theme", 1 ).EndL();
         else xmlw.TagL( "color" ).Attr( "rgb", font.color ).EndL();
+    }
+
+    void CWorkbook::AddImagesExtensions( XMLWriter & xmlw ) const
+    {
+        bool gif = false, jpg = false, jpeg = false, png = false, tif = false, tiff = false;
+        for( std::vector< CImage * >::const_iterator it = m_images.begin(); it != m_images.end(); it++ )
+            switch( ( * it )->Type )
+            {
+                case CImage::unknown    :   assert( false ); break;
+                case CImage::gif        :   gif = true; break;
+                case CImage::jpg        :   jpg = true; break;
+                case CImage::jpeg       :   jpeg = true; break;
+                case CImage::png        :   png = true; break;
+                case CImage::tif        :   tif = true; break;
+                case CImage::tiff       :   tiff = true; break;
+            }
+        if( gif ) xmlw.TagL( "Default" ).Attr( "Extension", "gif" ).Attr( "ContentType", "image/gif" ).EndL();
+        if( jpg ) xmlw.TagL( "Default" ).Attr( "Extension", "jpg" ).Attr( "ContentType", "image/jpeg" ).EndL();
+        if( jpeg ) xmlw.TagL( "Default" ).Attr( "Extension", "jpeg" ).Attr( "ContentType", "image/jpeg" ).EndL();
+        if( png ) xmlw.TagL( "Default" ).Attr( "Extension", "png" ).Attr( "ContentType", "image/png" ).EndL();
+        if( tif ) xmlw.TagL( "Default" ).Attr( "Extension", "tif" ).Attr( "ContentType", "image/tiff" ).EndL();
+        if( tiff ) xmlw.TagL( "Default" ).Attr( "Extension", "tiff" ).Attr( "ContentType", "image/tiff" ).EndL();
     }
 
     // ****************************************************************************

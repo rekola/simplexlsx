@@ -19,11 +19,11 @@ namespace SimpleXlsx
             //Register XML and creating all necessary subdirectories
             inline const _tstring RegisterXML( const _tstring & PathToFile )
             {
-                _tstring Result = m_temp_path + PathToFile;
-                MakeDirectory( Result );
-                m_contentFiles.push_back( PathToFile );
-                return Result;
+                return RegisterFile( PathToFile );
             }
+
+            //Creating all necessary subdirectories and copy image file
+            bool RegisterImage( const _tstring & LocalPath, const _tstring & XLSX_Path );
 
             //Deletes all temporary files and directories which have been created
             void ClearTemp();
@@ -36,13 +36,20 @@ namespace SimpleXlsx
             // *INDENT-OFF*   For AStyle tool
 
             //Encode File Path for the Operation System
-#if ! defined( _WIN32 ) && defined( _UNICODE )      //Linux with Unicode
+#if defined( _UNICODE )
+
+#if ! defined( _WIN32 ) //Linux with Unicode
             static std::string PathEncode( const wchar_t * Path );
             static inline std::string PathEncode( const std::wstring & Path )   { return PathEncode( Path.c_str() ); }
-#else
-            static inline _tstring PathEncode( const TCHAR * Path )             { return Path; }
-            static inline _tstring PathEncode( const _tstring & Path )          { return Path; }
+#else   //Windows with Unicode
+            static std::string PathEncode( const wchar_t * Path );
+            static inline std::string PathEncode( const std::wstring & Path )   { return PathEncode( Path.c_str() ); }
 #endif
+
+#else
+            static inline std::string PathEncode( const char * Path )           { return Path; }
+            static inline std::string PathEncode( const std::string & Path )    { return Path; }
+#endif  // _UNICODE
             // *INDENT-ON*   For AStyle tool
 
         private:
@@ -60,6 +67,15 @@ namespace SimpleXlsx
             /// @return Boolean result of the operation
             // ****************************************************************************
             bool MakeDirectory( const _tstring & dirName );
+
+            //Register file for XLSX and creating all necessary subdirectories
+            inline const _tstring RegisterFile( const _tstring & PathToFile )
+            {
+                _tstring Result = m_temp_path + PathToFile;
+                MakeDirectory( Result );
+                m_contentFiles.push_back( PathToFile );
+                return Result;
+            }
     };
 
 }

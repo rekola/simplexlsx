@@ -81,6 +81,7 @@ namespace SimpleXlsx
 
             void BeginRow( uint32_t height = 0 );
             inline void AddCell()                                       { m_current_column++; }
+            inline void AddEmptyCells( uint32_t Count )                 { m_current_column += Count; }
 
             void AddCell( const CellDataStr & data )                    { AddCell( data.value, data.style_id );        }
             void AddCell( const std::string & value, size_t style_id = 0 );

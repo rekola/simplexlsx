@@ -47,20 +47,18 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif  // _WIN32
 
 #ifdef _UNICODE
+
 #include "../UTF8Encoder.hpp"
 
-typedef std::wofstream 		_tofstream;
 typedef std::wstring		_tstring;
 typedef std::wostringstream	_tstringstream;
-typedef std::wostream		_tstream;
 #else
-typedef std::ofstream		_tofstream;
+
 typedef std::string			_tstring;
 typedef std::ostringstream	_tstringstream;
-typedef std::ostream		_tstream;
 #endif // _UNICODE
 
-#define SIMPLE_XLSX_VERSION	_T("0.24")
+#define SIMPLE_XLSX_VERSION	_T("0.25")
 
 namespace SimpleXlsx
 {
@@ -812,19 +810,40 @@ namespace SimpleXlsx
             }
     };
 
-    //Struct for the chart position description
-    struct ChartPoint
+    //Struct for the drawing (chart, image) position description
+    struct DrawingPoint
     {
         uint32_t col;	///< Column (starts from 0)
         uint32_t colOff;///< Column Offset (starts from 0)
         uint32_t row;	///< Row (starts from 0)
         uint32_t rowOff;///< Row Offset (starts from 0)
 
-        ChartPoint() {}
-        ChartPoint( uint32_t acol, uint32_t arow ) :
+        DrawingPoint() {}
+        DrawingPoint( uint32_t acol, uint32_t arow ) :
             col( acol ), colOff( 0 ), row( arow ), rowOff( 0 ) {}
-        ChartPoint( uint32_t acol, uint32_t acolOff, uint32_t arow, uint32_t arowOff ) :
+        DrawingPoint( uint32_t acol, uint32_t acolOff, uint32_t arow, uint32_t arowOff ) :
             col( acol ), colOff( acolOff ), row( arow ), rowOff( arowOff ) {}
+    };
+
+    //Class for image description
+    class CImage
+    {
+        public:
+            enum ImageType
+            {
+                unknown, gif, jpg, jpeg, png, tif, tiff
+            };
+
+            _tstring    LocalPath;      //Path to the file in the system
+            _tstring    InternalName;   //Name of the file in XLSX
+            ImageType   Type;           //Image type (extension)
+            uint16_t    Width;          //Width of the image
+            uint16_t    Height;         //Height of the image
+
+            static const uint16_t   PointByPixel = 9525;    // Points count by one pixel
+
+            CImage( const _tstring & LocPath, const _tstring TempPath, ImageType AType, uint16_t AWidth, uint16_t AHeight ) :
+                LocalPath( LocPath ), InternalName( TempPath ), Type( AType ), Width( AWidth ), Height( AHeight ) {}
     };
 
 }	// namespace SimpleXlsx

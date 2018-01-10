@@ -24,6 +24,7 @@ namespace SimpleXlsx
             std::vector<CChartsheet *>  m_chartsheets;		///< a series of chart sheets
             std::vector<CChart *>       m_charts;           ///< a series of charts
             std::vector<CDrawing *>     m_drawings;         ///< a series of drawings
+            std::vector<CImage *>       m_images;           ///< a series of images
             std::map<std::string, uint64_t> m_sharedStrings;///<
             std::vector<Comment>		m_comments;			///<
 
@@ -50,10 +51,21 @@ namespace SimpleXlsx
             CWorksheet & AddSheet( const _tstring & title, uint32_t frozenWidth, uint32_t frozenHeight, std::vector<ColumnWidth> & colWidths );
 
             //Adds chart into the data sheet
-            CChart & AddChart( CWorksheet & sheet, ChartPoint TopLeft, ChartPoint BottomRight, EChartTypes type = CHART_LINEAR );
+            CChart & AddChart( CWorksheet & sheet, DrawingPoint TopLeft, DrawingPoint BottomRight, EChartTypes type = CHART_LINEAR );
 
             //Adds sheet with single chart
             CChartsheet & AddChartSheet( const _tstring & title, EChartTypes type = CHART_LINEAR );
+
+            //Adds image into the data sheet. Supported image formats: gif, jpg, png, tif.
+            //If the same image is added several times, then in XLSX will be copied only once.
+            //Returns true if the image is added. False if the file is unavailable or the format does not supported.
+            bool AddImage( CWorksheet & sheet, const _tstring & filename, DrawingPoint TopLeft, DrawingPoint BottomRight );
+            //Overloaded method. The size of the image is set by the scale along X and Y axes, in percent.
+            bool AddImage( CWorksheet & sheet, const _tstring & filename, DrawingPoint TopLeft, uint16_t XScale, uint16_t YScale );
+            inline bool AddImage( CWorksheet & sheet, const _tstring & filename, DrawingPoint TopLeft, uint16_t XYScale = 100 )
+            {
+                return AddImage( sheet, filename, TopLeft, XYScale, XYScale );
+            }
 
             // *INDENT-OFF*   For AStyle tool
 
@@ -82,6 +94,7 @@ namespace SimpleXlsx
 
             CWorksheet & InitWorkSheet( CWorksheet * sheet, const _tstring & title );
             CDrawing * CreateDrawing();
+            CImage * CreateImage( const _tstring & filename );
             _tstring NormalizeSheetName( const _tstring & title );
 
             bool SaveCore();
@@ -103,6 +116,7 @@ namespace SimpleXlsx
             void AddBorders( XMLWriter & xmlw ) const;
             void AddBorder( XMLWriter & xmlw, const char * borderName, Border::BorderItem border ) const;
             void AddFontInfo( XMLWriter & xmlw, const Font & font, const char * FontTagName, int32_t Charset ) const;
+            void AddImagesExtensions( XMLWriter & xmlw ) const;
 
             static std::string GetFormatCodeString( const NumFormat & fmt );
             static std::string GetFormatCodeColor( ENumericStyleColor color );

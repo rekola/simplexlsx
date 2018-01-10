@@ -58,6 +58,7 @@ namespace SimpleXlsx
     extern const char * type_chartsheet;
     extern const char * type_chart;
     extern const char * type_drawing;
+    extern const char * type_image;
 
     extern const char * ns_a;
     extern const char * ns_c;

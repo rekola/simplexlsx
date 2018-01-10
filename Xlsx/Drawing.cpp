@@ -36,13 +36,30 @@ namespace SimpleXlsx
         XMLWriter xmlw( m_pathManager.RegisterXML( FileName.str() ) );
         xmlw.Tag( "Relationships" ).Attr( "xmlns", ns_relationships );
         int rId = 1;
-        for( std::vector<ChartInfo>::const_iterator it = m_charts.begin(); it != m_charts.end(); it++, rId++ )
+        for( std::vector<DrawingInfo>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++, rId++ )
         {
             _tstringstream Target, rIdStream;
-            Target << "../charts/chart" << ( *it ).Chart->GetIndex() << ".xml";
+            const char * TypeString = NULL;
+            switch( ( * it ).AType )
+            {
+                case DrawingInfo::absoluteAnchor:
+                case DrawingInfo::twoCellAnchor:
+                {
+                    TypeString = type_chart;
+                    Target << "../charts/chart" << ( *it ).Chart->GetIndex() << ".xml";
+                    break;
+                }
+                case DrawingInfo::imageOneCellAnchor:
+                case DrawingInfo::imageTwoCellAnchor:
+                {
+                    TypeString = type_image;
+                    Target << "../media/" << ( *it ).Image->InternalName;
+                    break;
+                }
+            }
             rIdStream << "rId" << rId;
 
-            xmlw.TagL( "Relationship" ).Attr( "Id", rIdStream.str() ).Attr( "Type", type_chart ).Attr( "Target", Target.str() ).EndL();
+            xmlw.TagL( "Relationship" ).Attr( "Id", rIdStream.str() ).Attr( "Type", TypeString ).Attr( "Target", Target.str() ).EndL();
         }
         xmlw.End( "Relationships" );
     }
@@ -57,11 +74,11 @@ namespace SimpleXlsx
         xmlw.Tag( "xdr:wsDr" ).Attr( "xmlns:xdr", ns_xdr ).Attr( "xmlns:a", ns_a );
 
         int rId = 1;
-        for( std::vector<ChartInfo>::const_iterator it = m_charts.begin(); it != m_charts.end(); it++, rId++ )
+        for( std::vector<DrawingInfo>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++, rId++ )
         {
             switch( ( * it ).AType )
             {
-                case ChartInfo::absoluteAnchor:
+                case DrawingInfo::absoluteAnchor:
                 {
                     xmlw.Tag( "xdr:absoluteAnchor" );
                     xmlw.TagL( "xdr:pos" ).Attr( "x", 0 ).Attr( "y", 0 ).EndL();
@@ -70,12 +87,30 @@ namespace SimpleXlsx
                     xmlw.End( "xdr:absoluteAnchor" );
                     break;
                 }
-                case ChartInfo::twoCellAnchor:
+                case DrawingInfo::twoCellAnchor:
                 {
                     xmlw.Tag( "xdr:twoCellAnchor" );
                     SaveChartPoint( xmlw, "xdr:from", ( * it ).TopLeft );
                     SaveChartPoint( xmlw, "xdr:to", ( * it ).BottomRight );
                     SaveChartSection( xmlw, ( * it ).Chart, rId );
+                    xmlw.End( "xdr:twoCellAnchor" );
+                    break;
+                }
+                case DrawingInfo::imageOneCellAnchor:
+                {
+                    xmlw.Tag( "xdr:oneCellAnchor" ).Attr( "editAs", "oneCell" );
+                    SaveChartPoint( xmlw, "xdr:from", ( * it ).TopLeft );
+                    xmlw.TagL( "xdr:ext" ).Attr( "cx", ( * it ).BottomRight.col ).Attr( "cy", ( * it ).BottomRight.row ).EndL();
+                    SaveImageSection( xmlw, ( * it ).Image, rId );
+                    xmlw.End( "xdr:oneCellAnchor" );
+                    break;
+                }
+                case DrawingInfo::imageTwoCellAnchor:
+                {
+                    xmlw.Tag( "xdr:twoCellAnchor" );
+                    SaveChartPoint( xmlw, "xdr:from", ( * it ).TopLeft );
+                    SaveChartPoint( xmlw, "xdr:to", ( * it ).BottomRight );
+                    SaveImageSection( xmlw, ( * it ).Image, rId );
                     xmlw.End( "xdr:twoCellAnchor" );
                     break;
                 }
@@ -107,7 +142,32 @@ namespace SimpleXlsx
         xmlw.TagL( "xdr:clientData" ).EndL();
     }
 
-    void CDrawing::SaveChartPoint( XMLWriter & xmlw, const char * Tag, const ChartPoint & Point )
+    void CDrawing::SaveImageSection( XMLWriter & xmlw, CImage * image, int rId )
+    {
+        _tstringstream rIdStream;
+        rIdStream << "rId" << rId;
+
+        xmlw.Tag( "xdr:pic" ).Tag( "xdr:nvPicPr" );
+        xmlw.TagL( "xdr:cNvPr" ).Attr( "id", rId ).Attr( "name", image->InternalName ).EndL();
+        xmlw.Tag( "xdr:cNvPicPr" ).TagL( "a:picLocks" ).Attr( "noChangeAspect", 1 ).EndL().End( "xdr:cNvPicPr" );
+        xmlw.End( "xdr:nvPicPr" );
+
+        xmlw.Tag( "xdr:blipFill" );
+        xmlw.Tag( "a:blip" ).Attr( "xmlns:r", ns_relationships_chart ).Attr( "r:embed", rIdStream.str() );
+        xmlw.End( "a:blip" );
+        xmlw.Tag( "a:stretch" ).TagL( "a:fillRect" ).EndL().End( "a:stretch" );
+        xmlw.End( "xdr:blipFill" );
+
+        xmlw.Tag( "xdr:spPr" );
+        xmlw.Tag( "a:prstGeom" ).Attr( "prst", "rect" ).TagL( "a:avLst" ).EndL().End( "a:prstGeom" );
+        xmlw.End( "xdr:spPr" );
+
+        xmlw.End( "xdr:pic" );
+
+        xmlw.TagL( "xdr:clientData" ).EndL();
+    }
+
+    void CDrawing::SaveChartPoint( XMLWriter & xmlw, const char * Tag, const DrawingPoint & Point )
     {
         xmlw.Tag( Tag );
         xmlw.TagOnlyContent( "xdr:col", Point.col );

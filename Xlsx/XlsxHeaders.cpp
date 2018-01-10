@@ -86,6 +86,7 @@ namespace SimpleXlsx
     const char * type_chartsheet    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet";
     const char * type_chart         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     const char * type_drawing       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
+    const char * type_image         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 
     const char * ns_a				= "http://schemas.openxmlformats.org/drawingml/2006/main";
     const char * ns_c               = "http://schemas.openxmlformats.org/drawingml/2006/chart";

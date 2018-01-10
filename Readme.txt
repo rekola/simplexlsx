@@ -1,3 +1,10 @@
+2018-01-04 Version 0.25
+	Change log:
+		- Saving empty cells with format (borders, fill...) (thanks for this to E.Naumovich).
+		- Adding images to a worksheet by CWorkbook::AddImage in two ways: with a binding on two cells (anchored) or scaling on axes X and Y (in percent). Supported image formats (via file extension): gif, jpg, jpeg, png, tif, tiff (thanks for idea to Henrique Aschenbrenner and E.Naumovich).
+		- Minor bug fixes.
+		- Updated examples.
+
 2017-12-02 Version 0.24
 	Change log:
 		- Added checking of sheet names: length up to 31 characters and forbidden characters "/\[]*:?" are replaced with '_' (Excel restrictions)

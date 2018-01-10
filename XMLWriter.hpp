@@ -31,20 +31,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define XMLWRITER_H
 
 #include <cassert>
-#include <cstdlib>
-#include <cstring>
 #include <iostream>
 #include <ostream>
 #include <stack>
 #include <string>
-#include <vector>
 
-#if defined( _WIN32 ) && defined( _UNICODE )
-
-#include <windows.h>
-
-#endif
-
+#include "PathManager.hpp"
 #include "UTF8Encoder.hpp"
 
 #include "Xlsx/SimpleXlsxDef.h"
@@ -56,34 +48,10 @@ namespace SimpleXlsx
     class XMLWriter
     {
         public:
-            inline XMLWriter( const std::string & FileName ) : _TagOpen( false ), _SelfClosed( true )
+            inline XMLWriter( const _tstring & FileName ) : _TagOpen( false ), _SelfClosed( true )
             {
-                Init( FileName );
+                Init( PathManager::PathEncode( FileName ) );
             }
-#ifdef _UNICODE
-            inline XMLWriter( const std::wstring & FileName ) : _TagOpen( false ), _SelfClosed( true )
-            {
-#ifdef _WIN32
-                int Length = static_cast< int >( FileName.size() );
-                int ResultSize = WideCharToMultiByte( CP_ACP, 0, FileName.c_str(), Length, NULL, 0, NULL, NULL );
-                std::vector<char> AnsiFileName( ResultSize + 1, 0 );
-                WideCharToMultiByte( CP_ACP, 0, FileName.c_str(), Length, AnsiFileName.data(), ResultSize, NULL, NULL );
-                Init( AnsiFileName.data() );
-#else
-                const wchar_t * Ptr = FileName.c_str();
-                mbstate_t MbState;
-                //mbrlen( NULL, 0, & MbState );
-                std::memset( & MbState, 0, sizeof( MbState ) );
-                std::size_t BufSize = wcsrtombs( NULL, & Ptr, 0, & MbState );
-                if( ( BufSize != static_cast<std::size_t>( -1 ) ) && ( BufSize != 0 ) )
-                {
-                    std::vector<char> LocalFileName( BufSize + 1, 0 );
-                    wcsrtombs( LocalFileName.data(), & Ptr, BufSize, & MbState );
-                    Init( LocalFileName.data() );
-                }
-#endif
-            }
-#endif      // _UNICODE
 
             inline ~XMLWriter()
             {

@@ -1,13 +1,15 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstring>
+#include <iostream>
+
+#include <unistd.h>
 
 #include "PathManager.hpp"
 
 #ifdef _WIN32
-#include <direct.h>
+#include <windows.h>
 #else
-#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
@@ -16,17 +18,33 @@
 namespace SimpleXlsx
 {
 
+    //Creating all necessary subdirectories and copy image file
+    bool PathManager::RegisterImage( const _tstring & LocalPath, const _tstring & XLSX_Path )
+    {
+        std::ifstream Source( PathEncode( LocalPath ).c_str(), std::ios::binary );
+        if( Source.is_open() )
+        {
+            const _tstring InternalPath = RegisterFile( XLSX_Path );
+            std::ofstream Destination( PathEncode( InternalPath ).c_str(), std::ios::binary );
+            if( Destination.is_open() )
+            {
+                Destination << Source.rdbuf();
+                return true;
+            }
+        }
+        return false;
+    }
+
     //Deletes all temporary files and directories which have been created
     void PathManager::ClearTemp()
     {
         for( std::list<_tstring>::const_iterator it = m_contentFiles.begin(); it != m_contentFiles.end(); it++ )
-            _tremove( PathEncode( m_temp_path + ( * it ) ).c_str() );
+            remove( PathEncode( m_temp_path + ( * it ) ).c_str() );
         m_contentFiles.clear();
         for( std::vector<_tstring>::const_reverse_iterator it = m_temp_dirs.rbegin(); it != m_temp_dirs.rend(); it++ )
-            _trmdir( PathEncode( ( * it ) ).c_str() );
+            rmdir( PathEncode( ( * it ) ).c_str() );
         m_temp_dirs.clear();
     }
-
 
     // ****************************************************************************
     /// @brief  Function to create nested directories` tree
@@ -47,8 +65,8 @@ namespace SimpleXlsx
                 part += dirName.substr( oldPointer, currPointer - oldPointer ) + _T( "/" );
                 oldPointer = currPointer + 1;
 #ifdef _WIN32
-                std::replace( part.begin(), part.end(), '/', '\\' );
-                res = _tmkdir( part.c_str() );
+                std::replace( part.begin(), part.end(), _T( '/' ), _T( '\\' ) );
+                res = mkdir( PathEncode( part ).c_str() );
 #else
                 res = mkdir( PathEncode( part ).c_str(), 0777 );
 #endif
@@ -60,7 +78,9 @@ namespace SimpleXlsx
         return true;
     }
 
-#if ! defined( _WIN32 ) && defined( _UNICODE )      //Linux with Unicode
+#if defined( _UNICODE )
+
+#if ! defined( _WIN32 )     //Linux with Unicode
     std::string PathManager::PathEncode( const wchar_t * Path )
     {
         mbstate_t MbState;
@@ -74,6 +94,18 @@ namespace SimpleXlsx
         MbVector[ BufSize ] = '\0';
         return MbVector.data();
     }
+
+#else                       //Windows with Unicode
+    std::string PathManager::PathEncode( const wchar_t * Path )
+    {
+        int Length = static_cast< int >( wcslen( Path ) );
+        int ResultSize = WideCharToMultiByte( CP_ACP, 0, Path, Length, NULL, 0, NULL, NULL );
+        std::vector<char> AnsiFileName( ResultSize + 1, 0 );
+        WideCharToMultiByte( CP_ACP, 0, Path, Length, AnsiFileName.data(), ResultSize, NULL, NULL );
+        return AnsiFileName.data();
+    }
 #endif
+
+#endif  // _UNICODE
 
 }
