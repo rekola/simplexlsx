@@ -17,13 +17,17 @@ Key features:
 - Multiplatform: BSD, Linux, Windows
 - No external dependencies.
 
-The Simple DirectMedia Layer library source code is available from:
+The SimpleXlsxWriter source code is available from:
 https://sourceforge.net/projects/simplexlsx/
 
 This library is distributed under the terms of the zlib license:
 http://www.zlib.net/zlib_license.html
 
-
+2018-02-13 Version 0.27
+	Change log:
+		- Added CMakeLists.txt (thanks for this to Thomas Bechmann).
+		- The type of row height changed to double type (previously uint32_t) according to ISO/IEC 29500-1: 2016 section 18.3.1.73 (thanks for this to Thomas Bechmann).
+		- Added CWorksheet::AddCell method with an unsigned long as a parameter (thanks for this to Thomas Bechmann).
 2018-02-08 Version 0.26
 	Change log:
 		- Fixed compilation in Visual Studio 2017 (thanks for this to jordi73).

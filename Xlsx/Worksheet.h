@@ -100,7 +100,7 @@ namespace SimpleXlsx
 
             // *INDENT-OFF*   For AStyle tool
 
-            void BeginRow( uint32_t height = 0 );
+            void BeginRow( double height = 0 );
             inline void AddCell()                                       { m_current_column++; }
             inline void AddEmptyCells( uint32_t Count )                 { m_current_column += Count; }
 
@@ -124,6 +124,8 @@ namespace SimpleXlsx
             void AddCell( uint32_t value, size_t style_id = 0 )         { AddCellRoutine( value, style_id );           }
             void AddCells( const std::vector<CellDataUInt> & data )     { AddCellsTempl( data ); }
 
+            void AddCell( uint64_t value, size_t style_id = 0 )         { AddCellRoutine( value, style_id );           }
+
             void AddCell( const CellDataDbl & data )                    { AddCellRoutine( data.value, data.style_id ); }
             void AddCell( double value, size_t style_id = 0 )           { AddCellRoutine( value, style_id );           }
             void AddCells( const std::vector<CellDataDbl> & data )      { AddCellsTempl( data ); }
@@ -133,12 +135,12 @@ namespace SimpleXlsx
             void AddCells( const std::vector<CellDataFlt> & data )      { AddCellsTempl( data ); }
             void EndRow();
 
-            void AddRow( const std::vector<CellDataStr> & data, uint32_t offset = 0, uint32_t height = 0 )  { AddRowTempl( data, offset, height ); }
-            void AddRow( const std::vector<CellDataTime> & data, uint32_t offset = 0, uint32_t height = 0 ) { AddRowTempl( data, offset, height ); }
-            void AddRow( const std::vector<CellDataInt> & data, uint32_t offset = 0, uint32_t height = 0 )  { AddRowTempl( data, offset, height ); }
-            void AddRow( const std::vector<CellDataUInt> & data, uint32_t offset = 0, uint32_t height = 0 ) { AddRowTempl( data, offset, height ); }
-            void AddRow( const std::vector<CellDataDbl> & data, uint32_t offset = 0, uint32_t height = 0 )  { AddRowTempl( data, offset, height ); }
-            void AddRow( const std::vector<CellDataFlt> & data, uint32_t offset = 0, uint32_t height = 0 )  { AddRowTempl( data, offset, height ); }
+            void AddRow( const std::vector<CellDataStr> & data, uint32_t offset = 0, double height = 0.0 )  { AddRowTempl( data, offset, height ); }
+            void AddRow( const std::vector<CellDataTime> & data, uint32_t offset = 0, double height = 0.0 ) { AddRowTempl( data, offset, height ); }
+            void AddRow( const std::vector<CellDataInt> & data, uint32_t offset = 0, double height = 0.0 )  { AddRowTempl( data, offset, height ); }
+            void AddRow( const std::vector<CellDataUInt> & data, uint32_t offset = 0, double height = 0.0 ) { AddRowTempl( data, offset, height ); }
+            void AddRow( const std::vector<CellDataDbl> & data, uint32_t offset = 0, double height = 0.0 )  { AddRowTempl( data, offset, height ); }
+            void AddRow( const std::vector<CellDataFlt> & data, uint32_t offset = 0, double height = 0.0 )  { AddRowTempl( data, offset, height ); }
 
             void MergeCells( CellCoord cellFrom, CellCoord cellTo );
 
@@ -183,7 +185,7 @@ namespace SimpleXlsx
             void AddCellsTempl( const std::vector<T> & data );
 
             template<typename T>
-            void AddRowTempl( const std::vector<T> & data, uint32_t offset, uint32_t height );
+            void AddRowTempl( const std::vector<T> & data, uint32_t offset, double height );
 
             bool SaveSheetRels();
 
@@ -218,17 +220,17 @@ namespace SimpleXlsx
     /// @brief  Appends another row into the sheet
     /// @param  data reference to the vector of  <T>
     /// @param  offset the offset from the row begining (0 by default)
-    /// @param	height row height (deafult if 0)
+    /// @param	height row height (default if 0)
     /// @return no
     // ****************************************************************************
     template<typename T>
-    void CWorksheet::AddRowTempl( const std::vector<T> & data, uint32_t offset, uint32_t height )
+    void CWorksheet::AddRowTempl( const std::vector<T> & data, uint32_t offset, double height )
     {
         m_offset_column = offset;
         _tstringstream Spans;
         Spans << m_offset_column + 1 << ':' << data.size() + m_offset_column + 1;
         m_XMLWriter->Tag( "row" ).Attr( "r", ++m_row_index ).Attr( "spans", Spans.str() ).Attr( "x14ac:dyDescent", 0.25 );
-        if( height != 0 ) m_XMLWriter->Attr( "ht", height ).Attr( "customHeight", 1 );
+        if( height > 0 ) m_XMLWriter->Attr( "ht", height ).Attr( "customHeight", 1 );
         m_current_column = 0;
         AddCells( data );
         m_XMLWriter->End( "row" );
@@ -241,12 +243,12 @@ namespace SimpleXlsx
     /// @param	height row height (default if 0)
     /// @return	no
     // ****************************************************************************
-    inline void CWorksheet::BeginRow( uint32_t height )
+    inline void CWorksheet::BeginRow(double height )
     {
         if( m_row_opened ) m_XMLWriter->End( "row" );
         m_XMLWriter->Tag( "row" ).Attr( "r", ++m_row_index ).Attr( "x14ac:dyDescent", 0.25 );
 
-        if( height != 0 ) m_XMLWriter->Attr( "ht", height ).Attr( "customHeight", 1 );
+        if( height > 0 ) m_XMLWriter->Attr( "ht", height ).Attr( "customHeight", 1 );
 
         m_current_column = 0;
         m_row_opened = true;

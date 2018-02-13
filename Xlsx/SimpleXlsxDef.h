@@ -50,7 +50,7 @@ typedef std::string			_tstring;
 typedef std::ostringstream	_tstringstream;
 #endif // _UNICODE
 
-#define SIMPLE_XLSX_VERSION	_T("0.26")
+#define SIMPLE_XLSX_VERSION	_T("0.27")
 
 namespace SimpleXlsx
 {
