@@ -40,7 +40,7 @@ namespace SimpleXlsx
     // ****************************************************************************
     CChart::CChart( size_t index, EChartTypes type, PathManager & pathmanager ) :  m_index( index ), m_pathManager( pathmanager )
     {
-        m_title = _T( "Diagramm 1" );
+        m_title = "Diagramm 1";
         m_seriesSet.clear();
 
         m_diagramm.typeMain = type;
@@ -82,8 +82,8 @@ namespace SimpleXlsx
         // [- /xl/charts/chartX.xml
         if( m_seriesSet.empty() ) return false;
 
-        _tstringstream FileName;
-        FileName << _T( "/xl/charts/chart" ) << m_index << _T( ".xml" );
+        std::stringstream FileName;
+        FileName << "/xl/charts/chart" << m_index << ".xml";
         XMLWriter xmlw( m_pathManager.RegisterXML( FileName.str() ) );
 
         xmlw.Tag( "c:chartSpace" ).Attr( "xmlns:c", ns_c ).Attr( "xmlns:a", ns_a ).Attr( "xmlns:r", ns_relationships_chart );
@@ -98,7 +98,7 @@ namespace SimpleXlsx
         xmlw.End( "mc:AlternateContent" );
 
         xmlw.Tag( "c:chart" );
-        if( m_diagramm.name != _T( "" ) )
+        if( ! m_diagramm.name.empty() )
             AddTitle( xmlw, m_diagramm.name, m_diagramm.nameSize, false );
 
         xmlw.TagL( "c:autoTitleDeleted" ).Attr( "val", 0 ).EndL();
@@ -243,7 +243,7 @@ namespace SimpleXlsx
     /// @param  vertPos indicates whether the title is allocated on X axis (false) or vertical (true)
     /// @return no
     // ****************************************************************************
-    void CChart::AddTitle( XMLWriter & xmlw, const _tstring & name, uint32_t size, bool vertPos )
+    void CChart::AddTitle( XMLWriter & xmlw, const UniString & name, uint32_t size, bool vertPos )
     {
         xmlw.Tag( "c:title" ).Tag( "c:tx" ).Tag( "c:rich" ).Tag( "a:bodyPr" );
         if( vertPos )
@@ -336,8 +336,8 @@ namespace SimpleXlsx
 
         xmlw.Tag( x.isVal ? "c:valAx" : "c:catAx" ).TagL( "c:axId" ).Attr( "val", x.id ).EndL(); /// val/cat issue patch
         xmlw.Tag( "c:scaling" ).TagL( "c:orientation" ).Attr( "val", "minMax" ).EndL();
-        if( x.minValue != _T( "" ) ) xmlw.TagL( "c:min" ).Attr( "val", x.minValue ).EndL();
-        if( x.maxValue != _T( "" ) ) xmlw.TagL( "c:max" ).Attr( "val", x.maxValue ).EndL();
+        if( x.minValue != "" ) xmlw.TagL( "c:min" ).Attr( "val", x.minValue ).EndL();
+        if( x.maxValue != "" ) xmlw.TagL( "c:max" ).Attr( "val", x.maxValue ).EndL();
         xmlw.End( "c:scaling" );
 
         if( x.pos == POS_NONE ) xmlw.TagL( "c:delete" ).Attr( "val", 1 ).EndL();
@@ -350,7 +350,7 @@ namespace SimpleXlsx
         else if( x.gridLines == GRID_MINOR ) xmlw.TagL( "c:minorGridlines" ).EndL();
         else if( x.gridLines == GRID_MAJOR_N_MINOR ) xmlw.TagL( "c:majorGridlines" ).EndL().TagL( "c:minorGridlines" ).EndL();
 
-        if( x.name != _T( "" ) )
+        if( ! x.name.empty() )
             AddTitle( xmlw, x.name, x.nameSize, false );
 
         xmlw.TagL( "c:tickLblPos" ).Attr( "val", "nextTo" ).EndL();
@@ -393,8 +393,8 @@ namespace SimpleXlsx
 
         xmlw.Tag( "c:scaling" );
         xmlw.TagL( "c:orientation" ).Attr( "val", "minMax" ).EndL();
-        if( y.minValue != _T( "" ) ) xmlw.TagL( "c:min" ).Attr( "val", y.minValue ).EndL();
-        if( y.maxValue != _T( "" ) ) xmlw.TagL( "c:max" ).Attr( "val", y.maxValue ).EndL();
+        if( y.minValue != "" ) xmlw.TagL( "c:min" ).Attr( "val", y.minValue ).EndL();
+        if( y.maxValue != "" ) xmlw.TagL( "c:max" ).Attr( "val", y.maxValue ).EndL();
         xmlw.End( "c:scaling" );
 
         if( y.pos == POS_NONE ) xmlw.TagL( "c:delete" ).Attr( "val", 1 ).EndL();
@@ -405,7 +405,7 @@ namespace SimpleXlsx
         else if( y.gridLines == GRID_MINOR ) xmlw.TagL( "c:minorGridlines" ).EndL();
         else if( y.gridLines == GRID_MAJOR_N_MINOR ) xmlw.TagL( "c:majorGridlines" ).EndL().TagL( "c:minorGridlines" ).EndL();
 
-        if( y.name != _T( "" ) )
+        if( ! y.name.empty() )
             AddTitle( xmlw, y.name, y.nameSize, true );
 
         if( y.sourceLinked ) xmlw.TagL( "c:numFmt" ).Attr( "formatCode", "General" ).Attr( "sourceLinked", 1 ).EndL();
@@ -474,7 +474,7 @@ namespace SimpleXlsx
             xmlw.End( "c:marker" );
 
 
-            if( it->title != _T( "" ) )
+            if( ! it->title.empty() )
             {
                 xmlw.Tag( "c:tx" ).Tag( "c:strRef" ).Tag( "c:strCache" );
                 xmlw.TagL( "c:ptCount" ).Attr( "val", 1 ).EndL();
@@ -518,15 +518,15 @@ namespace SimpleXlsx
             if( ( it->catSheet != NULL ) && ( ( it->catAxisTo.row != 0 ) || ( it->catAxisTo.col != 0 ) ) )
             {
                 xAxis.sourceLinked = true;
-                _tstring cfRange = CellRangeString( it->catSheet->GetTitle(),
-                                                    CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
-                                                    CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );
+                std::string cfRange = CellRangeString( it->catSheet->GetTitle(),
+                                                       CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
+                                                       CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );
                 xmlw.Tag( "c:cat" ).Tag( "c:numRef" ).TagOnlyContent( "c:f", cfRange ).End( "c:numRef" ).End( "c:cat" );
             }
 
-            _tstring cfRange = CellRangeString( it->valSheet->GetTitle(),
-                                                CellCoord( it->valAxisFrom.row, it->valAxisFrom.col ),
-                                                CellCoord( it->valAxisTo.row, it->valAxisTo.col ) );
+            std::string cfRange = CellRangeString( it->valSheet->GetTitle(),
+                                                   CellCoord( it->valAxisFrom.row, it->valAxisFrom.col ),
+                                                   CellCoord( it->valAxisTo.row, it->valAxisTo.col ) );
             xmlw.Tag( "c:val" ).Tag( "c:numRef" ).TagOnlyContent( "c:f", cfRange ).End( "c:numRef" ).End( "c:val" );
             xmlw.TagL( "c:smooth" ).Attr( "val", it->JoinType == Series::joinSmooth ? 1 : 0 ).EndL();
             xmlw.End( "c:ser" );
@@ -570,16 +570,16 @@ namespace SimpleXlsx
             xmlw.TagL( "c:idx" ).Attr( "val", firstSeriesId ).EndL();
             xmlw.TagL( "c:order" ).Attr( "val", firstSeriesId ).EndL();
 
-            if( it->title != _T( "" ) ) xmlw.Tag( "c:tx" ).TagOnlyContent( "c:v", it->title ).End( "c:tx" );
+            if( ! it->title.empty() ) xmlw.Tag( "c:tx" ).TagOnlyContent( "c:v", it->title ).End( "c:tx" );
             if( ( it->catSheet != NULL ) && ( ( it->catAxisTo.row != 0 ) || ( it->catAxisTo.col != 0 ) ) )
             {
                 xAxis.sourceLinked = true;
-                _tstring cfRange = CellRangeString( it->catSheet->GetTitle(),
+                std::string cfRange = CellRangeString( it->catSheet->GetTitle(),
                                                     CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
                                                     CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );
                 xmlw.Tag( "c:cat" ).Tag( "c:numRef" ).TagOnlyContent( "c:f", cfRange ).End( "c:numRef" ).End( "c:cat" );
             }
-            _tstring cfRange = CellRangeString( it->valSheet->GetTitle(),
+            std::string cfRange = CellRangeString( it->valSheet->GetTitle(),
                                                 CellCoord( it->valAxisFrom.row, it->valAxisFrom.col ),
                                                 CellCoord( it->valAxisTo.row, it->valAxisTo.col ) );
             xmlw.Tag( "c:val" ).Tag( "c:numRef" ).TagOnlyContent( "c:f", cfRange ).End( "c:numRef" ).End( "c:val" );
@@ -647,7 +647,7 @@ namespace SimpleXlsx
             };
             xmlw.End( "c:marker" );
 
-            if( it->title != _T( "" ) )
+            if( ! it->title.empty() )
                 xmlw.Tag( "c:tx" ).TagOnlyContent( "c:v", it->title ).End( "c:tx" );
             //  if( (style == SCATTER_POINT) && (it->lineWidth>0) )
             if( it->JoinType == Series::joinNone )
@@ -679,7 +679,7 @@ namespace SimpleXlsx
                 xmlw.TagL( "a:prstDash" ).Attr( "val", dashID ).EndL().End( "a:ln" ).End( "c:spPr" );
 
             }
-            _tstring cfRange = CellRangeString( it->catSheet->GetTitle(),
+            std::string cfRange = CellRangeString( it->catSheet->GetTitle(),
                                                 CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
                                                 CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );
             xmlw.Tag( "c:xVal" ).Tag( "c:numRef" ).TagOnlyContent( "c:f", cfRange ).End( "c:numRef" ).End( "c:xVal" );
@@ -702,17 +702,10 @@ namespace SimpleXlsx
         xmlw.End( "c:scatterChart" );
     }
 
-    _tstring CChart::CellRangeString( const _tstring & Title, const CellCoord & CellFrom, const CellCoord & szCellTo )
+    std::string CChart::CellRangeString( const std::string & Title, const CellCoord & CellFrom, const CellCoord & szCellTo )
     {
-        //_sntprintf(szRange, _T("'%s'!$%s:$%s"), series[i].valSheet->GetTitle().c_str(), szCellFrom, szCellTo);
-        _tstringstream RangeStream;
-        RangeStream << _T( '\'' ) << Title << _T( "\'!$" );
-#ifdef _UNICODE
-        const std::string & From = CellFrom.ToString(), & To = szCellTo.ToString();
-        RangeStream << _tstring( From.begin(), From.end() ) << _T( ":$" ) << _tstring( To.begin(), To.end() );
-#else
-        RangeStream << CellFrom.ToString() << _T( ":$" ) << szCellTo.ToString();
-#endif
+        std::stringstream RangeStream;
+        RangeStream << '\'' << Title << "\'!$" << CellFrom.ToString() << ":$" << szCellTo.ToString();
         return RangeStream.str();
     }
 

@@ -62,10 +62,10 @@ namespace SimpleXlsx
     {
         {
             // [- /xl/chartsheets/_rels/sheetX.xml.rels
-            _tstringstream FileName;
-            FileName << _T( "/xl/chartsheets/_rels/sheet" ) << m_index << _T( ".xml.rels" );
+            std::stringstream FileName;
+            FileName << "/xl/chartsheets/_rels/sheet" << m_index << ".xml.rels";
 
-            _tstringstream Target;
+            std::stringstream Target;
             Target << "../drawings/drawing" << m_Drawing.GetIndex() << ".xml";
 
             XMLWriter xmlw( m_pathManager.RegisterXML( FileName.str() ) );
@@ -78,8 +78,8 @@ namespace SimpleXlsx
 
         {
             // [- /xl/chartsheets/sheetX.xml
-            _tstringstream FileName;
-            FileName << _T( "/xl/chartsheets/sheet" ) << m_index << _T( ".xml" );
+            std::stringstream FileName;
+            FileName << "/xl/chartsheets/sheet" << m_index << ".xml";
 
             XMLWriter xmlw( m_pathManager.RegisterXML( FileName.str() ) );
             xmlw.Tag( "chartsheet" ).Attr( "xmlns", ns_book ).Attr( "xmlns:r", ns_book_r ).TagL( "sheetPr" ).EndL();

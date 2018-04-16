@@ -56,7 +56,7 @@ namespace SimpleXlsx
             std::vector<Comment> *	m_comments;         ///< pointer to the vector of comments
             std::list<std::string>  m_mergedCells;	///< list of merged cells` ranges (e.g. A1:B2)
             size_t					m_index;            ///< current sheet number
-            _tstring             	m_title;            ///< page title
+            UniString             	m_title;            ///< page title
             bool                    m_withFormula;      ///< indicates whether the sheet contains formulae
             bool					m_withComments;		///< indicates whether the sheet contains any comments
             bool                    m_isOk;             ///< indicates initialization successfulness
@@ -81,8 +81,8 @@ namespace SimpleXlsx
             inline void     GetCalcChain( std::vector<std::string> & chain ) const  { chain = m_calcChain; }
 
             // @section    SEC_USER User interface
-            inline _tstring GetTitle() const                { return m_title; }
-            inline void SetTitle( const _tstring & title )  { if( ! title.empty() ) m_title = title; }
+            inline const UniString & GetTitle() const       { return m_title; }
+            inline void SetTitle( const UniString & title ) { if( ! title.empty() ) m_title = title; }
 
             inline void SetPageOrientation( EPageOrientation orient ) { m_page_orientation = orient; }
 
@@ -107,9 +107,7 @@ namespace SimpleXlsx
             void AddCell( const CellDataStr & data )                    { AddCell( data.value, data.style_id );        }
             void AddCell( const std::string & value, size_t style_id = 0 );
             void AddCell( const char * value, size_t style_id = 0 )     { AddCell( std::string( value ), style_id );   }
-#ifdef _UNICODE
-            void AddCell( const std::wstring & value, size_t style_id  = 0 ){ AddCell( UTF8Encoder::From_wstring( value ), style_id ); }
-#endif
+            void AddCell( const std::wstring & value, size_t style_id = 0 ){ AddCell( UTF8Encoder::From_wstring( value ), style_id ); }
             void AddCells( const std::vector<CellDataStr> & data );
 
             void AddCell( const CellDataTime & data )                   { AddCell( data.value, data.style_id );        }
@@ -227,7 +225,7 @@ namespace SimpleXlsx
     void CWorksheet::AddRowTempl( const std::vector<T> & data, uint32_t offset, double height )
     {
         m_offset_column = offset;
-        _tstringstream Spans;
+        std::stringstream Spans;
         Spans << m_offset_column + 1 << ':' << data.size() + m_offset_column + 1;
         m_XMLWriter->Tag( "row" ).Attr( "r", ++m_row_index ).Attr( "spans", Spans.str() ).Attr( "x14ac:dyDescent", 0.25 );
         if( height > 0 ) m_XMLWriter->Attr( "ht", height ).Attr( "customHeight", 1 );

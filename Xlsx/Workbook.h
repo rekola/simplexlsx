@@ -40,7 +40,7 @@ namespace SimpleXlsx
     // ****************************************************************************
     class CWorkbook
     {
-            _tstring                    m_temp_path;		///< path to the temporary directory (unique for a book)
+            std::string                 m_temp_path;		///< path to the temporary directory (unique for a book)
             std::vector<CWorksheet *>   m_worksheets;		///< a series of data sheets
             std::vector<CChartsheet *>  m_chartsheets;		///< a series of chart sheets
             std::vector<CChart *>       m_charts;           ///< a series of charts
@@ -50,7 +50,7 @@ namespace SimpleXlsx
             std::vector<Comment>		m_comments;			///<
 
             size_t                      m_commLastId;		///< m_commLastId comments counter
-            _tstring                    m_UserName;
+            UniString                   m_UserName;
             size_t                      m_sheetId;          ///< Current sheet sequence number (for sheets ordering)
             size_t                      m_activeSheetIndex; ///< Index of active (opened) sheet
 
@@ -60,30 +60,73 @@ namespace SimpleXlsx
 
         public:
             // @section    Constructors / destructor
-            CWorkbook( const _tstring & UserName = _T( "" ) );
+            CWorkbook( const UniString & UserName = "" );
             virtual ~CWorkbook();
 
             // @section    User interface
 
             //Adds another data sheet into the workbook
-            CWorksheet & AddSheet( const _tstring & title );
-            CWorksheet & AddSheet( const _tstring & title, std::vector<ColumnWidth> & colWidths );
-            CWorksheet & AddSheet( const _tstring & title, uint32_t frozenWidth, uint32_t frozenHeight );
-            CWorksheet & AddSheet( const _tstring & title, uint32_t frozenWidth, uint32_t frozenHeight, std::vector<ColumnWidth> & colWidths );
+            inline CWorksheet & AddSheet( const std::string & title )
+            {
+                return CreateSheet( NormalizeSheetName( title ) );
+            }
+            inline CWorksheet & AddSheet( const std::wstring & title )
+            {
+                return CreateSheet( NormalizeSheetName( title ) );
+            }
+            inline CWorksheet & AddSheet( const std::string & title, std::vector<ColumnWidth> & colWidths )
+            {
+                return CreateSheet( NormalizeSheetName( title ), colWidths );
+            }
+            inline CWorksheet & AddSheet( const std::wstring & title, std::vector<ColumnWidth> & colWidths )
+            {
+                return CreateSheet( NormalizeSheetName( title ), colWidths );
+            }
+            inline CWorksheet & AddSheet( const std::string & title, uint32_t frozenWidth, uint32_t frozenHeight )
+            {
+                return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight );
+            }
+            inline CWorksheet & AddSheet( const std::wstring & title, uint32_t frozenWidth, uint32_t frozenHeight )
+            {
+                return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight );
+            }
+            inline CWorksheet & AddSheet( const std::string & title, uint32_t frozenWidth, uint32_t frozenHeight,
+                                          std::vector<ColumnWidth> & colWidths )
+            {
+                return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight, colWidths );
+            }
+            inline CWorksheet & AddSheet( const std::wstring & title, uint32_t frozenWidth, uint32_t frozenHeight,
+                                          std::vector<ColumnWidth> & colWidths )
+            {
+                return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight, colWidths );
+            }
 
             //Adds chart into the data sheet
             CChart & AddChart( CWorksheet & sheet, DrawingPoint TopLeft, DrawingPoint BottomRight, EChartTypes type = CHART_LINEAR );
 
             //Adds sheet with single chart
-            CChartsheet & AddChartSheet( const _tstring & title, EChartTypes type = CHART_LINEAR );
+            inline CChartsheet & AddChartSheet( const std::string & title, EChartTypes type = CHART_LINEAR )
+            {
+                return CreateChartSheet( NormalizeSheetName( title ), type );
+            }
+            inline CChartsheet & AddChartSheet( const std::wstring & title, EChartTypes type = CHART_LINEAR )
+            {
+                return CreateChartSheet( NormalizeSheetName( title ), type );
+            }
 
             //Adds image into the data sheet. Supported image formats: gif, jpg, png, tif.
             //If the same image is added several times, then in XLSX will be copied only once.
             //Returns true if the image is added. False if the file is unavailable or the format does not supported.
-            bool AddImage( CWorksheet & sheet, const _tstring & filename, DrawingPoint TopLeft, DrawingPoint BottomRight );
+            bool AddImage( CWorksheet & sheet, const std::string & filename, DrawingPoint TopLeft, DrawingPoint BottomRight );
+            bool AddImage( CWorksheet & sheet, const std::wstring & filename, DrawingPoint TopLeft, DrawingPoint BottomRight );
             //Overloaded method. The size of the image is set by the scale along X and Y axes, in percent.
-            bool AddImage( CWorksheet & sheet, const _tstring & filename, DrawingPoint TopLeft, uint16_t XScale, uint16_t YScale );
-            inline bool AddImage( CWorksheet & sheet, const _tstring & filename, DrawingPoint TopLeft, uint16_t XYScale = 100 )
+            bool AddImage( CWorksheet & sheet, const std::string & filename, DrawingPoint TopLeft, uint16_t XScale, uint16_t YScale );
+            bool AddImage( CWorksheet & sheet, const std::wstring & filename, DrawingPoint TopLeft, uint16_t XScale, uint16_t YScale );
+            inline bool AddImage( CWorksheet & sheet, const std::string & filename, DrawingPoint TopLeft, uint16_t XYScale = 100 )
+            {
+                return AddImage( sheet, filename, TopLeft, XYScale, XYScale );
+            }
+            inline bool AddImage( CWorksheet & sheet, const std::wstring & filename, DrawingPoint TopLeft, uint16_t XYScale = 100 )
             {
                 return AddImage( sheet, filename, TopLeft, XYScale, XYScale );
             }
@@ -106,17 +149,40 @@ namespace SimpleXlsx
             // *INDENT-ON*   For AStyle tool
 
             //Save current workbook
-            bool Save( const _tstring & name );
+            bool Save( const std::string & filename );
+            bool Save( const std::wstring & filename );
 
         private:
             //Disable copy and assignment
             CWorkbook( const CWorkbook & that );
             CWorkbook & operator=( const CWorkbook & );
 
-            CWorksheet & InitWorkSheet( CWorksheet * sheet, const _tstring & title );
+            CWorksheet & CreateSheet( const UniString & title );
+            CWorksheet & CreateSheet( const UniString & title, std::vector<ColumnWidth> & colWidths );
+            CWorksheet & CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight );
+            CWorksheet & CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight,
+                                      std::vector<ColumnWidth> & colWidths );
+            CWorksheet & InitWorkSheet( CWorksheet * sheet, const UniString & title );
+
+            CChartsheet & CreateChartSheet( const UniString & title, EChartTypes type );
             CDrawing * CreateDrawing();
-            CImage * CreateImage( const _tstring & filename );
-            _tstring NormalizeSheetName( const _tstring & title );
+            CImage * CreateImage( const std::string & filename );
+
+            template< typename string_type >
+            string_type NormalizeSheetName( const string_type & title )
+            {
+                string_type Result = title;
+                for( typename string_type::iterator it = Result.begin(); it != Result.end(); it++ )
+                    if( ( * it == '\\' ) || ( * it == '/' ) ||
+                            ( * it == '[' )  || ( * it == ']' ) ||
+                            ( * it == '*' )  || ( * it == ':' ) ||
+                            ( * it == '?' ) )
+                    {
+                        Result.replace( it, it + 1, 1, '_' );
+                    }
+                if( Result.length() > 31 ) Result.resize( 31 ); // 31 - is a max length of sheet name
+                return Result;
+            }
 
             bool SaveCore();
             bool SaveContentType();

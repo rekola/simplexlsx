@@ -638,8 +638,8 @@ void Assert(TState &state,bool cond, const char *msg)
 { if (cond) return;
   state.err=msg;
 }
-void __cdecl Trace(const char *x, ...) {va_list paramList; va_start(paramList, x); paramList; va_end(paramList);}
-void __cdecl Tracec(bool ,const char *x, ...) {va_list paramList; va_start(paramList, x); paramList; va_end(paramList);}
+void __cdecl Trace(const char *x, ...) {va_list paramList; va_start(paramList, x); va_end(paramList);}
+void __cdecl Tracec(bool ,const char *x, ...) {va_list paramList; va_start(paramList, x); va_end(paramList);}
 
 
 
@@ -2167,18 +2167,18 @@ char zencode(unsigned long *keys, char c)
 
 
 
-bool HasZipSuffix(const TCHAR *fn)
-{ const TCHAR *ext = fn+_tcslen(fn);
+bool HasZipSuffix(const char *fn)
+{ const char *ext = fn+strlen(fn);
   while (ext>fn && *ext!='.') ext--;
   if (ext==fn && *ext!='.') return false;
-  if (_tcsicmp(ext,_T(".Z"))==0) return true;
-  if (_tcsicmp(ext,_T(".zip"))==0) return true;
-  if (_tcsicmp(ext,_T(".zoo"))==0) return true;
-  if (_tcsicmp(ext,_T(".arc"))==0) return true;
-  if (_tcsicmp(ext,_T(".lzh"))==0) return true;
-  if (_tcsicmp(ext,_T(".arj"))==0) return true;
-  if (_tcsicmp(ext,_T(".gz"))==0) return true;
-  if (_tcsicmp(ext,_T(".tgz"))==0) return true;
+  if (strcmp(ext,".Z")==0) return true;
+  if (strcmp(ext,".zip")==0) return true;
+  if (strcmp(ext,".zoo")==0) return true;
+  if (strcmp(ext,".arc")==0) return true;
+  if (strcmp(ext,".lzh")==0) return true;
+  if (strcmp(ext,".arj")==0) return true;
+  if (strcmp(ext,".gz")==0) return true;
+  if (strcmp(ext,".tgz")==0) return true;
   return false;
 }
 
@@ -2256,7 +2256,6 @@ ZRESULT GetFileInfo(HANDLE hf, ulg *attr, long *size, iztimes *times, ulg *times
     char szLink[MAX_PATH] = { 0 };
   //TCHAR fn[MAX_PATH] = { 0 };
     char fn[MAX_PATH] = { 0 };
-  //_stprintf( szLink, _T("/proc/self/fd/%d"), fileno( (FILE*)hf ) );
   snprintf( szLink, MAX_PATH, "/proc/self/fd/%d", fileno( (FILE*)hf ) );
   if (readlink(szLink, fn, sizeof(fn)) == -1) return ZR_NOFILE;
 
@@ -2350,7 +2349,7 @@ class TZip
   char buf[16384];
 
 
-  ZRESULT open_file(const TCHAR *fn);
+  ZRESULT open_file(const char *fn);
   ZRESULT open_handle(HANDLE hf,unsigned int len);
   ZRESULT open_mem(void *src,unsigned int len);
   ZRESULT open_dir();
@@ -2361,7 +2360,7 @@ class TZip
   ZRESULT ideflate(TZipFileInfo *zfi);
   ZRESULT istore();
 
-  ZRESULT Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags);
+  ZRESULT Add(const char *odstzn, void *src, unsigned int len, DWORD flags);
   ZRESULT AddCentral();
 
 };
@@ -2389,6 +2388,7 @@ ZRESULT TZip::Create(void *z,unsigned int len,DWORD flags)
     ocanseek = (res!=0xFFFFFFFF);
     if (ocanseek) ooffset=res; else ooffset=0;
 #else
+    (void)len;
     int res = fseek((FILE*)hfout, 0, SEEK_CUR);
     ocanseek = (res == 0);
     if (ocanseek) ooffset=ftell((FILE*)hfout); else ooffset=0;
@@ -2398,15 +2398,12 @@ ZRESULT TZip::Create(void *z,unsigned int len,DWORD flags)
   }
   else if (flags==ZIP_FILENAME)
   {
-    const TCHAR *fn = (const TCHAR*)z;
+    const char *fn = (const char*)z;
 #ifdef _WIN32
-    hfout = CreateFile(fn,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
+    hfout = CreateFileA(fn,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
     if (hfout==INVALID_HANDLE_VALUE) {hfout=0; return ZR_NOFILE;}
 #else
-
-    //hfout = fopen(fn, "w");
-    hfout = fopen( SimpleXlsx::PathManager::PathEncode( fn ).c_str(), "w");
-
+    hfout = fopen( fn, "w" );
     if ((FILE*)hfout == NULL) {return ZR_NOFILE;}
 #endif  // _WIN32
     ocanseek=true;
@@ -2531,19 +2528,16 @@ ZRESULT TZip::Close()
 
 
 
-ZRESULT TZip::open_file(const TCHAR *fn)
+ZRESULT TZip::open_file(const char *fn)
 { hfin=0; bufin=0; selfclosehf=false; crc=CRCVAL_INITIAL; isize=0; csize=0; ired=0;
   if (fn==0) return ZR_ARGS;
 #ifdef _WIN32
-  HANDLE hf = CreateFile(fn,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL);
+  HANDLE hf = CreateFileA(fn,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0,NULL);
   if (hf==INVALID_HANDLE_VALUE) return ZR_NOFILE;
   ZRESULT res = open_handle(hf,0);
   if (res!=ZR_OK) {CloseHandle(hf); return res;}
 #else
-
-  //FILE *fd = fopen(fn, "r");
-  FILE *fd = fopen( SimpleXlsx::PathManager::PathEncode( fn ).c_str(), "r");
-
+  FILE *fd = fopen(fn, "r");
   if (fd == NULL) return ZR_NOFILE;
   ZRESULT res = open_handle(fd,0);
   if (res!=ZR_OK) {fclose(fd); return res;}
@@ -2722,7 +2716,7 @@ ZRESULT TZip::istore()
 
 
 bool has_seeded=false;
-ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
+ZRESULT TZip::Add(const char *odstzn, void *src,unsigned int len, DWORD flags)
 { if (oerr) return ZR_FAILED;
   if (hasputcen) return ZR_ENDED;
 
@@ -2730,16 +2724,16 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
   int passex=0; if (password!=0 && flags!=ZIP_FOLDER) passex=12;
 
   // zip has its own notion of what its names should look like: i.e. dir/file.stuff
-  TCHAR dstzn[MAX_PATH]; _tcscpy(dstzn,odstzn);
+  char dstzn[MAX_PATH]; strcpy(dstzn,odstzn);
   if (*dstzn==0) return ZR_ARGS;
-  TCHAR *d=dstzn; while (*d!=0) {if (*d=='\\') *d='/'; d++;}
+  char *d=dstzn; while (*d!=0) {if (*d=='\\') *d='/'; d++;}
   bool isdir = (flags==ZIP_FOLDER);
-  bool needs_trailing_slash = (isdir && dstzn[_tcslen(dstzn)-1]!='/');
+  bool needs_trailing_slash = (isdir && dstzn[strlen(dstzn)-1]!='/');
   int method=DEFLATE; if (isdir || HasZipSuffix(dstzn)) method=STORE;
 
   // now open whatever was our input source:
   ZRESULT openres;
-  if (flags==ZIP_FILENAME) openres=open_file((const TCHAR*)src);
+  if (flags==ZIP_FILENAME) openres=open_file((const char *)src);
   else if (flags==ZIP_HANDLE) openres=open_handle((HANDLE)src,len);
   else if (flags==ZIP_MEMORY) openres=open_mem(src,len);
   else if (flags==ZIP_FOLDER) openres=open_dir();
@@ -2752,14 +2746,8 @@ ZRESULT TZip::Add(const TCHAR *odstzn, void *src,unsigned int len, DWORD flags)
   // Initialize the local header
   TZipFileInfo zfi; zfi.nxt=NULL;
   strcpy(zfi.name,"");
-#ifdef UNICODE
-  WideCharToMultiByte(CP_UTF8,0,dstzn,-1,zfi.iname,MAX_PATH,0,0);
-#else
+  strcpy(zfi.iname,dstzn);
 
-  //strcpy(zfi.iname,dstzn);
-    strcpy( zfi.iname, SimpleXlsx::PathManager::PathEncode( dstzn ).c_str() );
-
-#endif
   zfi.nam=strlen(zfi.iname);
   if (needs_trailing_slash) {strcat(zfi.iname,"/"); zfi.nam++;}
   strcpy(zfi.zname,"");
@@ -2964,11 +2952,11 @@ HZIP CreateZipInternal(void *z,unsigned int len,DWORD flags, const char *passwor
   han->flag=2; han->zip=zip; return (HZIP)han;
 }
 HZIP CreateZipHandle(HANDLE h, const char *password) {return CreateZipInternal(h,0,ZIP_HANDLE,password);}
-HZIP CreateZip(const TCHAR *fn, const char *password) {return CreateZipInternal((void*)fn,0,ZIP_FILENAME,password);}
+HZIP CreateZip(const char *fn, const char *password) {return CreateZipInternal((void*)fn,0,ZIP_FILENAME,password);}
 HZIP CreateZip(void *z,unsigned int len, const char *password) {return CreateZipInternal(z,len,ZIP_MEMORY,password);}
 
 
-ZRESULT ZipAddInternal(HZIP hz,const TCHAR *dstzn, void *src,unsigned int len, DWORD flags)
+ZRESULT ZipAddInternal(HZIP hz,const char *dstzn, void *src,unsigned int len, DWORD flags)
 { if (hz==0) {lasterrorZ=ZR_ARGS;return ZR_ARGS;}
   TZipHandleData *han = (TZipHandleData*)hz;
   if (han->flag!=2) {lasterrorZ=ZR_ZMODE;return ZR_ZMODE;}
@@ -2976,11 +2964,11 @@ ZRESULT ZipAddInternal(HZIP hz,const TCHAR *dstzn, void *src,unsigned int len, D
   lasterrorZ = zip->Add(dstzn,src,len,flags);
   return lasterrorZ;
 }
-ZRESULT ZipAdd(HZIP hz,const TCHAR *dstzn, const TCHAR *fn) {return ZipAddInternal(hz,dstzn,(void*)fn,0,ZIP_FILENAME);}
-ZRESULT ZipAdd(HZIP hz,const TCHAR *dstzn, void *src,unsigned int len) {return ZipAddInternal(hz,dstzn,src,len,ZIP_MEMORY);}
-ZRESULT ZipAddHandle(HZIP hz,const TCHAR *dstzn, HANDLE h) {return ZipAddInternal(hz,dstzn,h,0,ZIP_HANDLE);}
-ZRESULT ZipAddHandle(HZIP hz,const TCHAR *dstzn, HANDLE h, unsigned int len) {return ZipAddInternal(hz,dstzn,h,len,ZIP_HANDLE);}
-ZRESULT ZipAddFolder(HZIP hz,const TCHAR *dstzn) {return ZipAddInternal(hz,dstzn,0,0,ZIP_FOLDER);}
+ZRESULT ZipAdd(HZIP hz,const char *dstzn, const char *fn) {return ZipAddInternal(hz,dstzn,(void*)fn,0,ZIP_FILENAME);}
+ZRESULT ZipAdd(HZIP hz,const char *dstzn, void *src,unsigned int len) {return ZipAddInternal(hz,dstzn,src,len,ZIP_MEMORY);}
+ZRESULT ZipAddHandle(HZIP hz,const char *dstzn, HANDLE h) {return ZipAddInternal(hz,dstzn,h,0,ZIP_HANDLE);}
+ZRESULT ZipAddHandle(HZIP hz,const char *dstzn, HANDLE h, unsigned int len) {return ZipAddInternal(hz,dstzn,h,len,ZIP_HANDLE);}
+ZRESULT ZipAddFolder(HZIP hz,const char *dstzn) {return ZipAddInternal(hz,dstzn,0,0,ZIP_FOLDER);}
 
 
 

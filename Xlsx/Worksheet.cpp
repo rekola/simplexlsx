@@ -110,7 +110,7 @@ namespace SimpleXlsx
         m_current_column = 0;
         m_offset_column = 0;
         m_index = index;
-        m_title = _T( "Sheet 1" );
+        m_title = "Sheet 1";
         m_withFormula = false;
         m_withComments = false;
         m_calcChain.clear();
@@ -120,8 +120,8 @@ namespace SimpleXlsx
         m_row_index = 0;
         m_page_orientation = PAGE_PORTRAIT;
 
-        _tstringstream FileName;
-        FileName << _T( "/xl/worksheets/sheet" ) << m_index << _T( ".xml" );
+        std::stringstream FileName;
+        FileName << "/xl/worksheets/sheet" << m_index << ".xml";
         m_XMLWriter = new XMLWriter( m_pathManager.RegisterXML( FileName.str() ) );
         if( ( m_XMLWriter == NULL ) || ! m_XMLWriter->IsOk() )
         {
@@ -312,14 +312,14 @@ namespace SimpleXlsx
         size_t rId = 1;
         if( ! m_Drawing.IsEmpty() )
         {
-            _tstringstream rIdStream;
+            std::stringstream rIdStream;
             rIdStream << "rId" << rId;
             m_XMLWriter->TagL( "drawing" ).Attr( "r:id", rIdStream.str() ).EndL();
             rId++;
         }
         if( m_withComments )
         {
-            _tstringstream rIdStream;
+            std::stringstream rIdStream;
             rIdStream << "rId" << rId;
             m_XMLWriter->TagL( "legacyDrawing" ).Attr( "r:id", rIdStream.str() ).EndL();
             rId += 2;
@@ -344,15 +344,15 @@ namespace SimpleXlsx
     bool CWorksheet::SaveSheetRels()
     {
         // [- zip/xl/worksheets/_rels/sheetN.xml.rels
-        _tstringstream FileName;
-        FileName << _T( "/xl/worksheets/_rels/sheet" ) << m_index << _T( ".xml.rels" );
+        std::stringstream FileName;
+        FileName << "/xl/worksheets/_rels/sheet" << m_index << ".xml.rels";
 
         XMLWriter xmlw( m_pathManager.RegisterXML( FileName.str() ) );
         xmlw.Tag( "Relationships" ).Attr( "xmlns", ns_relationships );
         size_t rId = 1;
         if( ! m_Drawing.IsEmpty() )
         {
-            _tstringstream rIdStream, Drawing;
+            std::stringstream rIdStream, Drawing;
             rIdStream << "rId" << rId;
             Drawing << "../drawings/drawing" << m_index << ".xml";
             xmlw.TagL( "Relationship" ).Attr( "Id", rIdStream.str() ).Attr( "Type", type_drawing ).Attr( "Target", Drawing.str() ).EndL();
@@ -360,7 +360,7 @@ namespace SimpleXlsx
         }
         if( m_withComments )
         {
-            _tstringstream Vml, Comments, rIdVml, rIdComments;
+            std::stringstream Vml, Comments, rIdVml, rIdComments;
             Vml << "../drawings/vmlDrawing" << m_index << ".vml";
             Comments << "../comments" << m_index << ".xml";
             rIdVml << "rId" << rId;

@@ -28,21 +28,15 @@
 #include <stack>
 #include <string>
 
-#include "PathManager.hpp"
-#include "UTF8Encoder.hpp"
-
-#include "Xlsx/SimpleXlsxDef.h"
-
-
 namespace SimpleXlsx
 {
 
     class XMLWriter
     {
         public:
-            inline XMLWriter( const _tstring & FileName ) : _TagOpen( false ), _SelfClosed( true )
+            inline XMLWriter( const std::string & FileName ) : m_TagOpen( false ), m_SelfClosed( true )
             {
-                Init( PathManager::PathEncode( FileName ) );
+                Init( FileName );
             }
 
             inline ~XMLWriter()
@@ -53,29 +47,20 @@ namespace SimpleXlsx
 
             inline bool IsOk() const
             {
-                return _OStream.is_open();
+                return m_OStream.is_open();
             }
-
-
-            //RAW output to the Stream
-            /*template<class _T>
-            inline XMLWriter & operator <<( const _T & Value )
-            {
-                _OStream << Value;
-                return * this;
-            }*/
 
             //Returns the current precision of floating point
             std::streamsize GetFloatPrecision()
             {
-                return _OStream.precision();
+                return m_OStream.precision();
             }
 
             //Set the current precision for floating point.
             //Returns the precision before the call this function.
             std::streamsize SetFloatPrecision( std::streamsize NewPrecision )
             {
-                return _OStream.precision( NewPrecision );
+                return m_OStream.precision( NewPrecision );
             }
 
             //Light version without using stack of Tag Names.
@@ -86,9 +71,9 @@ namespace SimpleXlsx
                 assert( TagName != NULL );
                 DebugCheckAndIncLightTag();
                 CloseOpenedTag();
-                _OStream << '<' << TagName;
-                _TagOpen = true;
-                _SelfClosed = false;
+                m_OStream << '<' << TagName;
+                m_TagOpen = true;
+                m_SelfClosed = false;
                 return * this;
             }
 
@@ -98,8 +83,8 @@ namespace SimpleXlsx
             inline XMLWriter & EndL()
             {
                 DebugCheckAndDecLightTag();
-                _OStream << "/>";
-                _TagOpen = false;
+                m_OStream << "/>";
+                m_TagOpen = false;
                 return * this;
             }
 
@@ -108,38 +93,38 @@ namespace SimpleXlsx
                 assert( TagName != NULL );
                 CloseOpenedTag();
                 DebugCheckIsLightTagOpened();
-                _OStream << '<' << TagName;
-                _TagOpen = true;
-                _SelfClosed = true;
-                _Tags.push( TagName );
+                m_OStream << '<' << TagName;
+                m_TagOpen = true;
+                m_SelfClosed = true;
+                m_Tags.push( TagName );
                 return * this;
             }
 
             inline XMLWriter & End( const char * TagName = NULL )
             {
-                assert( ! _Tags.empty() );
+                assert( ! m_Tags.empty() );
                 DebugCheckIsLightTagOpened();
-                if( _SelfClosed ) _OStream << "/>";
-                else _OStream << "</" << _Tags.top() << '>';
+                if( m_SelfClosed ) m_OStream << "/>";
+                else m_OStream << "</" << m_Tags.top() << '>';
 #ifndef NDEBUG
                 if( TagName != NULL )
                 {
-                    if( _Tags.top() != TagName )
-                        std::cerr << "Wrong TagName for End: " << TagName << ". Wanted: " << _Tags.top() << std::endl;
-                    assert( _Tags.top() == TagName );
+                    if( m_Tags.top() != TagName )
+                        std::cerr << "Wrong TagName for End: " << TagName << ". Wanted: " << m_Tags.top() << std::endl;
+                    assert( m_Tags.top() == TagName );
                 }
 #else
                 ( void )TagName;
 #endif
-                _Tags.pop();
-                _TagOpen = false;
-                _SelfClosed = false;
+                m_Tags.pop();
+                m_TagOpen = false;
+                m_SelfClosed = false;
                 return * this;
             }
 
             inline XMLWriter & EndAll()
             {
-                while( ! _Tags.empty() )
+                while( ! m_Tags.empty() )
                     this->End();
                 return * this;
             }
@@ -149,10 +134,10 @@ namespace SimpleXlsx
                 assert( TagName != NULL );
                 CloseOpenedTag();
                 DebugCheckIsLightTagOpened();
-                _OStream << '<' << TagName << '>';
+                m_OStream << '<' << TagName << '>';
                 WriteStringEscape( ContentString );
-                _OStream << "</" << TagName << '>';
-                _SelfClosed = false;
+                m_OStream << "</" << TagName << '>';
+                m_SelfClosed = false;
                 return * this;
             }
 
@@ -167,8 +152,8 @@ namespace SimpleXlsx
             {
                 CloseOpenedTag();
                 DebugCheckIsLightTagOpened();
-                _OStream << '<' << TagName << '>' << Value << "</" << TagName << '>';
-                _SelfClosed = false;
+                m_OStream << '<' << TagName << '>' << Value << "</" << TagName << '>';
+                m_SelfClosed = false;
                 return *this;
             }
 
@@ -179,8 +164,8 @@ namespace SimpleXlsx
             inline XMLWriter & Attr( const char * AttrName, const char * String )
             {
                 assert( AttrName != NULL );
-                assert( _TagOpen );
-                _OStream << ' ' << AttrName << "=\"" << String << '"';
+                assert( m_TagOpen );
+                m_OStream << ' ' << AttrName << "=\"" << String << '"';
                 return * this;
             }
 
@@ -201,10 +186,10 @@ namespace SimpleXlsx
             inline XMLWriter & Attr( const char * AttrName, _T Value )
             {
                 assert( AttrName != NULL );
-                assert( _TagOpen );
-                _OStream.put( ' ' );
-                _OStream << AttrName << "=\"" << Value;
-                _OStream.put( '"' );
+                assert( m_TagOpen );
+                m_OStream.put( ' ' );
+                m_OStream << AttrName << "=\"" << Value;
+                m_OStream.put( '"' );
                 return *this;
             }
 
@@ -217,7 +202,7 @@ namespace SimpleXlsx
                 CloseOpenedTag();
                 DebugCheckIsLightTagOpened();
                 WriteStringEscape( String );
-                _SelfClosed = false;
+                m_SelfClosed = false;
                 return * this;
             }
 
@@ -239,53 +224,35 @@ namespace SimpleXlsx
             {
                 CloseOpenedTag();
                 DebugCheckIsLightTagOpened();
-                _OStream << Value;
-                _SelfClosed = false;
+                m_OStream << Value;
+                m_SelfClosed = false;
                 return *this;
             }
 
             template <typename _T>
             inline XMLWriter & Cont( _T * Value );
 
-#ifdef _UNICODE
-            //TagOnlyContent() overload for std::wstring type
-            inline XMLWriter & TagOnlyContent( const char * TagName, const std::wstring  & ContentString )
-            {
-                return TagOnlyContent( TagName, UTF8Encoder::From_wstring( ContentString ).c_str() );
-            }
-            //Attr() overload for std::wstring type
-            inline XMLWriter & Attr( const char * AttrName, const std::wstring & String )
-            {
-                return AttrInt( AttrName, UTF8Encoder::From_wstring( String ).c_str() );
-            }
-            //Cont() overload for std::wstring type
-            inline XMLWriter & Cont( const std::wstring & String )
-            {
-                return Cont( UTF8Encoder::From_wstring( String ).c_str() );
-            }
-#endif
-
         private:
-            bool _TagOpen, _SelfClosed;
-            std::ofstream       _OStream;
-            std::stack<std::string> _Tags;
+            bool                    m_TagOpen, m_SelfClosed;
+            std::ofstream           m_OStream;
+            std::stack<std::string> m_Tags;
 
             inline void Init( const std::string & FileName )
             {
                 assert( ! FileName.empty() );
 #ifndef NDEBUG
-                LightTagCounter = 0;
+                m_LightTagCounter = 0;
 #endif
-                _OStream.open( FileName.c_str(), std::ios_base::out );
-                _OStream.imbue( std::locale( "C" ) );
-                _OStream << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+                m_OStream.open( FileName.c_str(), std::ios_base::out );
+                m_OStream.imbue( std::locale( "C" ) );
+                m_OStream << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
             }
 
             inline void CloseOpenedTag()
             {
-                if( ! _TagOpen ) return;
-                _OStream.put( '>' );
-                _TagOpen = false;
+                if( ! m_TagOpen ) return;
+                m_OStream.put( '>' );
+                m_TagOpen = false;
             }
 
             inline void WriteStringEscape( const char * String )
@@ -293,12 +260,12 @@ namespace SimpleXlsx
                 for( ; * String; String++ )
                     switch( * String )
                     {
-                        case '&'    :   _OStream << "&amp;";        break;
-                        case '<'    :   _OStream << "&lt;";         break;
-                        case '>'    :   _OStream << "&gt;";         break;
-                        case '\''   :   _OStream << "&apos;";       break;
-                        case '"'    :   _OStream << "&quot;";       break;
-                        default     :   _OStream.put( * String );   break;
+                        case '&'    :   m_OStream << "&amp;";        break;
+                        case '<'    :   m_OStream << "&lt;";         break;
+                        case '>'    :   m_OStream << "&gt;";         break;
+                        case '\''   :   m_OStream << "&apos;";       break;
+                        case '"'    :   m_OStream << "&quot;";       break;
+                        default     :   m_OStream.put( * String );   break;
                     }
             }
 
@@ -306,10 +273,10 @@ namespace SimpleXlsx
             inline XMLWriter & AttrInt( const char * AttrName, const char * String )
             {
                 assert( AttrName != NULL );
-                assert( _TagOpen );
-                _OStream << ' ' << AttrName << "=\"";
+                assert( m_TagOpen );
+                m_OStream << ' ' << AttrName << "=\"";
                 WriteStringEscape( String );
-                _OStream.put( '"' );
+                m_OStream.put( '"' );
                 return * this;
             }
 
@@ -319,22 +286,22 @@ namespace SimpleXlsx
             inline void DebugCheckAndDecLightTag()      {}
             inline void DebugCheckIsLightTagOpened()    {}
 #else
-            intptr_t    LightTagCounter;
+            intptr_t    m_LightTagCounter;
 
             inline void DebugCheckAndIncLightTag()
             {
-                assert( LightTagCounter == 0 );
-                LightTagCounter++;
+                assert( m_LightTagCounter == 0 );
+                m_LightTagCounter++;
             }
 
             inline void DebugCheckAndDecLightTag()
             {
-                assert( LightTagCounter == 1 );
-                LightTagCounter--;
+                assert( m_LightTagCounter == 1 );
+                m_LightTagCounter--;
             }
             inline void DebugCheckIsLightTagOpened()
             {
-                assert( LightTagCounter == 0 );
+                assert( m_LightTagCounter == 0 );
             }
 #endif
     };

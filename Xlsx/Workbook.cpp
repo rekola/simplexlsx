@@ -59,7 +59,7 @@ namespace SimpleXlsx
     /// @brief  The class default constructor
     /// @return no
     // ****************************************************************************
-    CWorkbook::CWorkbook( const _tstring & UserName ) : m_UserName( UserName )
+    CWorkbook::CWorkbook( const UniString & UserName ) : m_UserName( UserName )
     {
         m_commLastId = 0;
         m_sheetId = 1;
@@ -77,10 +77,10 @@ namespace SimpleXlsx
         style.fill.patternType = PATTERN_GRAY_125;
         m_styleList.Add( style ); // default style
 
-        _tstringstream TmpStringStream;
+        std::stringstream TmpStringStream;
 #ifdef _WIN32
-        m_temp_path = _tgetenv( _T( "TEMP" ) );
-        TmpStringStream << _T( "/xlsx_" ) << GetCurrentThreadId() << _T( "_" ) << std::clock();
+        m_temp_path = getenv( "TEMP" );
+        TmpStringStream << "/xlsx_" << GetCurrentThreadId() << "_" << std::clock();
 #else
 
         const int EnvVarCount = 4;
@@ -90,13 +90,12 @@ namespace SimpleXlsx
             const char * Ptr = getenv( EnvVar[ i ] );
             if( Ptr != NULL )
             {
-                std::string TmpString = Ptr;
-                m_temp_path = _tstring( TmpString.begin(), TmpString.end() );
+                m_temp_path = Ptr;
                 break;
             }
         }
-        if( m_temp_path.empty() ) m_temp_path = _T( "/tmp" );
-        TmpStringStream << _T( "/xlsx_" ) << syscall( SYS_gettid ) << _T( "_" ) << std::clock();
+        if( m_temp_path.empty() ) m_temp_path = "/tmp";
+        TmpStringStream << "/xlsx_" << syscall( SYS_gettid ) << "_" << std::clock();
 #endif
         m_temp_path += TmpStringStream.str();
 
@@ -104,18 +103,11 @@ namespace SimpleXlsx
         if( m_UserName.empty() )
         {
 #ifdef _WIN32
-            m_UserName = _tgetenv( _T( "USERNAME" ) );
-#else
-
-#ifdef	_UNICODE
-            std::string TmpString = getenv( "USERNAME" );
-            m_UserName = _tstring( TmpString.begin(), TmpString.end() );
+            m_UserName = _wgetenv( L"USERNAME" );
 #else
             m_UserName = getenv( "USERNAME" );
 #endif
-
-#endif
-            if( m_UserName.empty() ) m_UserName = _T( "Unknown" );
+            if( m_UserName.empty() ) m_UserName = "Unknown";
         }
 
         m_pathManager = new PathManager( m_temp_path );
@@ -142,56 +134,6 @@ namespace SimpleXlsx
     }
 
     // ****************************************************************************
-    /// @brief  Adds another data sheet into the workbook
-    /// @param  title chart page title
-    /// @return Reference to a newly created object
-    // ****************************************************************************
-    CWorksheet & CWorkbook::AddSheet( const _tstring & title )
-    {
-        CWorksheet * sheet = new CWorksheet( m_sheetId++, * CreateDrawing(), * m_pathManager );
-        return InitWorkSheet( sheet, title );
-    }
-
-    // ****************************************************************************
-    /// @brief  Adds another data sheet into the workbook
-    /// @param  title chart page title
-    /// @param	colWidths list of pairs colNumber:Width
-    /// @return Reference to a newly created object
-    // ****************************************************************************
-    CWorksheet & CWorkbook::AddSheet( const _tstring & title, std::vector<ColumnWidth> & colWidths )
-    {
-        CWorksheet * sheet = new CWorksheet( m_sheetId++, colWidths, * CreateDrawing(), * m_pathManager );
-        return InitWorkSheet( sheet, title );
-    }
-
-    // ****************************************************************************
-    /// @brief  Adds another data sheet with a frozen pane into the workbook
-    /// @param  title chart page title
-    /// @param  frozenWidth frozen pane width (in number of cells from 0)
-    /// @param  frozenHeight frozen pane height (in number of cells from 0)
-    /// @return Reference to a newly created object
-    // ****************************************************************************
-    CWorksheet & CWorkbook::AddSheet( const _tstring & title, uint32_t frozenWidth, uint32_t frozenHeight )
-    {
-        CWorksheet * sheet = new CWorksheet( m_sheetId++, frozenWidth, frozenHeight, * CreateDrawing(), * m_pathManager );
-        return InitWorkSheet( sheet, title );
-    }
-
-    // ****************************************************************************
-    /// @brief  Adds another data sheet with a frozen pane into the workbook
-    /// @param  title chart page title
-    /// @param  frozenWidth frozen pane width (in number of cells from 0)
-    /// @param  frozenHeight frozen pane height (in number of cells from 0)
-    /// @param	colWidths list of pairs colNumber:Width
-    /// @return Reference to a newly created object
-    // ****************************************************************************
-    CWorksheet & CWorkbook::AddSheet( const _tstring & title, uint32_t frozenWidth, uint32_t frozenHeight, std::vector<ColumnWidth> & colWidths )
-    {
-        CWorksheet * sheet = new CWorksheet( m_sheetId++, frozenWidth, frozenHeight, colWidths, * CreateDrawing(), * m_pathManager );
-        return InitWorkSheet( sheet, title );
-    }
-
-    // ****************************************************************************
     /// @brief  Adds another chart into the existing worksheet
     /// @param  sheet existing worksheet
     /// @param  TopLeft top left point for the chart
@@ -207,27 +149,6 @@ namespace SimpleXlsx
     }
 
     // ****************************************************************************
-    /// @brief  Adds another chart sheet into the workbook
-    /// @param  title chart page title
-    /// @param  type type of main chart
-    /// @return Reference to a newly created object
-    // ****************************************************************************
-    CChartsheet & CWorkbook::AddChartSheet( const _tstring & title, EChartTypes type )
-    {
-        CChart * chart = new CChart( m_charts.size() + 1, type, * m_pathManager );
-        chart->SetTitle( NormalizeSheetName( title ) );
-        m_charts.push_back( chart );
-
-        CDrawing * drawing = CreateDrawing();
-        drawing->AppendChart( chart );
-
-        CChartsheet * chartsheet = new CChartsheet( m_sheetId++, * chart, * drawing, * m_pathManager );
-        m_chartsheets.push_back( chartsheet );
-
-        return * chartsheet;
-    }
-
-    // ****************************************************************************
     /// @brief  Adds image into the data sheet. Supported image formats: gif, jpg, png, tif.
     /// @brief  If the same image is added several times, then in XLSX will be copied only once.
     /// @param  sheet existing worksheet
@@ -236,7 +157,7 @@ namespace SimpleXlsx
     /// @param  BottomRight bottom right point for the chart
     /// @return True if success. False if the file is unavailable or the format does not supported.
     // ****************************************************************************
-    bool CWorkbook::AddImage( CWorksheet & sheet, const _tstring & filename, DrawingPoint TopLeft, DrawingPoint BottomRight )
+    bool CWorkbook::AddImage( CWorksheet & sheet, const std::string & filename, DrawingPoint TopLeft, DrawingPoint BottomRight )
     {
         CImage * image = CreateImage( filename );
         if( image != NULL )
@@ -245,6 +166,11 @@ namespace SimpleXlsx
         }
         return image != NULL;
     }
+    bool CWorkbook::AddImage( CWorksheet & sheet, const std::wstring & filename, DrawingPoint TopLeft, DrawingPoint BottomRight )
+    {
+        return AddImage( sheet, PathManager::PathEncode( filename ), TopLeft, BottomRight );
+    }
+
     // ****************************************************************************
     /// @brief  Adds image into the data sheet. Supported image formats (file extension): gif, jpg, jpeg, png, tif, tiff.
     /// @brief  If the same image is added several times, then in XLSX will be copied only once.
@@ -254,7 +180,7 @@ namespace SimpleXlsx
     /// @param  XScale the scale along the X-axis, in percent
     /// @param  YScale the scale along the Y-axis, in percent
     /// @return True if success. False if the file is unavailable or the format does not supported.
-    bool CWorkbook::AddImage( CWorksheet & sheet, const _tstring & filename, DrawingPoint TopLeft, uint16_t XScale, uint16_t YScale )
+    bool CWorkbook::AddImage( CWorksheet & sheet, const std::string & filename, DrawingPoint TopLeft, uint16_t XScale, uint16_t YScale )
     {
         CImage * image = CreateImage( filename );
         if( image != NULL )
@@ -263,13 +189,17 @@ namespace SimpleXlsx
         }
         return image != NULL;
     }
+    bool CWorkbook::AddImage( CWorksheet & sheet, const std::wstring & filename, DrawingPoint TopLeft, uint16_t XScale, uint16_t YScale )
+    {
+        return AddImage( sheet, PathManager::PathEncode( filename ), TopLeft, XScale, YScale );
+    }
 
     // ****************************************************************************
     /// @brief  Saves workbook into the specified file
     /// @param  name full path to the file
     /// @return Boolean result of the operation
     // ****************************************************************************
-    bool CWorkbook::Save( const _tstring & name )
+    bool CWorkbook::Save( const std::string & filename )
     {
         if( !SaveCore() || !SaveApp() || !SaveContentType() || !SaveTheme() ||
                 !SaveComments() || !SaveSharedStrings() || !SaveStyles() || !SaveWorkbook() )
@@ -287,14 +217,14 @@ namespace SimpleXlsx
 
         bool bRetCode = true;
 
-        HZIP hZip = CreateZip( name.c_str(), NULL ); // create .zip without encryption
+        HZIP hZip = CreateZip( filename.c_str(), NULL ); // create .zip without encryption
         if( hZip != 0 )
         {
-            std::list<_tstring>::const_iterator end_it = m_pathManager->ContentFiles().end();
-            for( std::list<_tstring>::const_iterator it = m_pathManager->ContentFiles().begin(); it != end_it; it++ )
+            std::vector< std::string >::const_iterator end_it = m_pathManager->ContentFiles().end();
+            for( std::vector< std::string >::const_iterator it = m_pathManager->ContentFiles().begin(); it != end_it; it++ )
             {
-                const _tstring & File = * it;
-                _tstring Path = m_temp_path + File;
+                const std::string & File = * it;
+                std::string Path = m_temp_path + File;
                 ZRESULT res = ZipAdd( hZip, File.c_str() + 1, Path.c_str() );
                 if( res != ZR_OK )
                 {
@@ -309,14 +239,83 @@ namespace SimpleXlsx
         m_pathManager->ClearTemp();
         return bRetCode;
     }
-
-    CWorksheet & CWorkbook::InitWorkSheet( CWorksheet * sheet, const _tstring & title )
+    bool CWorkbook::Save( const std::wstring & filename )
     {
-        sheet->SetTitle( NormalizeSheetName( title ) );
+        return Save( PathManager::PathEncode( filename ) );
+    }
+
+    // ****************************************************************************
+    /// @brief  Adds another data sheet into the workbook
+    /// @param  title chart page title
+    /// @return Reference to a newly created object
+    // ****************************************************************************
+    CWorksheet & CWorkbook::CreateSheet( const UniString & title )
+    {
+        CWorksheet * sheet = new CWorksheet( m_sheetId++, * CreateDrawing(), * m_pathManager );
+        return InitWorkSheet( sheet, title );
+    }
+
+    // ****************************************************************************
+    /// @brief  Adds another data sheet into the workbook
+    /// @param  title chart page title
+    /// @param	colWidths list of pairs colNumber:Width
+    /// @return Reference to a newly created object
+    // ****************************************************************************
+    CWorksheet & CWorkbook::CreateSheet( const UniString & title, std::vector<ColumnWidth> & colWidths )
+    {
+        CWorksheet * sheet = new CWorksheet( m_sheetId++, colWidths, * CreateDrawing(), * m_pathManager );
+        return InitWorkSheet( sheet, title );
+    }
+
+    // ****************************************************************************
+    /// @brief  Adds another data sheet with a frozen pane into the workbook
+    /// @param  title chart page title
+    /// @param  frozenWidth frozen pane width (in number of cells from 0)
+    /// @param  frozenHeight frozen pane height (in number of cells from 0)
+    /// @return Reference to a newly created object
+    // ****************************************************************************
+    CWorksheet & CWorkbook::CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight )
+    {
+        CWorksheet * sheet = new CWorksheet( m_sheetId++, frozenWidth, frozenHeight, * CreateDrawing(), * m_pathManager );
+        return InitWorkSheet( sheet, title );
+    }
+
+    // ****************************************************************************
+    /// @brief  Adds another data sheet with a frozen pane into the workbook
+    /// @param  title chart page title
+    /// @param  frozenWidth frozen pane width (in number of cells from 0)
+    /// @param  frozenHeight frozen pane height (in number of cells from 0)
+    /// @param	colWidths list of pairs colNumber:Width
+    /// @return Reference to a newly created object
+    // ****************************************************************************
+    CWorksheet & CWorkbook::CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight, std::vector<ColumnWidth> & colWidths )
+    {
+        CWorksheet * sheet = new CWorksheet( m_sheetId++, frozenWidth, frozenHeight, colWidths, * CreateDrawing(), * m_pathManager );
+        return InitWorkSheet( sheet, title );
+    }
+
+    CWorksheet & CWorkbook::InitWorkSheet( CWorksheet * sheet, const UniString & title )
+    {
+        sheet->SetTitle( title );
         sheet->SetSharedStr( & m_sharedStrings );
         sheet->SetComments( & m_comments );
         m_worksheets.push_back( sheet );
         return * sheet;
+    }
+
+    CChartsheet & CWorkbook::CreateChartSheet( const UniString & title, EChartTypes type )
+    {
+        CChart * chart = new CChart( m_charts.size() + 1, type, * m_pathManager );
+        chart->SetTitle( title );
+        m_charts.push_back( chart );
+
+        CDrawing * drawing = CreateDrawing();
+        drawing->AppendChart( chart );
+
+        CChartsheet * chartsheet = new CChartsheet( m_sheetId++, * chart, * drawing, * m_pathManager );
+        m_chartsheets.push_back( chartsheet );
+
+        return * chartsheet;
     }
 
     CDrawing * CWorkbook::CreateDrawing()
@@ -464,22 +463,22 @@ namespace SimpleXlsx
     }
     struct TSupportedImages // Supported image files
     {
-        _tstring            FileExt;
+        std::string            FileExt;
         CImage::ImageType   ImageType;
         bool ( * FuncPtr )( std::ifstream &, uint16_t &, uint16_t & );
     };
     static const TSupportedImages KnownExt[] =
     {
-        { _T( ".gif" ),     CImage::gif,    & GetDimensionFromGIF   },
-        { _T( ".jpg" ),     CImage::jpg,    & GetDimensionFromJPEG  },
-        { _T( ".jpeg" ),    CImage::jpeg,   & GetDimensionFromJPEG  },
-        { _T( ".png" ),     CImage::png,    & GetDimensionFromPNG   },
-        { _T( ".tif" ),     CImage::tif,    & GetDimensionFromTIFF  },
-        { _T( ".tiff" ),    CImage::tiff,   & GetDimensionFromTIFF  },
-        { _T( "" ),         CImage::unknown, NULL }
+        { ".gif",     CImage::gif,      & GetDimensionFromGIF   },
+        { ".jpg",     CImage::jpg,      & GetDimensionFromJPEG  },
+        { ".jpeg",    CImage::jpeg,     & GetDimensionFromJPEG  },
+        { ".png",     CImage::png,      & GetDimensionFromPNG   },
+        { ".tif",     CImage::tif,      & GetDimensionFromTIFF  },
+        { ".tiff",    CImage::tiff,     & GetDimensionFromTIFF  },
+        { "",         CImage::unknown,  NULL }
     };
 
-    CImage * CWorkbook::CreateImage( const _tstring & filename )
+    CImage * CWorkbook::CreateImage( const std::string & filename )
     {
         CImage * image = NULL;
         for( std::vector< CImage * >::const_iterator it = m_images.begin(); it != m_images.end(); it++ )
@@ -490,12 +489,12 @@ namespace SimpleXlsx
             }
         if( image == NULL ) //New image
         {
-            size_t LastPoint = filename.find_last_of( _T( '.' ) );
+            size_t LastPoint = filename.find_last_of( '.' );
             if( LastPoint == filename.npos )    //No extension
                 return NULL;
-            _tstring Ext = filename.substr( LastPoint );
+            std::string Ext = filename.substr( LastPoint );
             std::transform( Ext.begin(), Ext.end(), Ext.begin(), ::tolower );
-            std::ifstream imfile( PathManager::PathEncode( filename ).c_str(), std::ios::binary );
+            std::ifstream imfile( filename.c_str(), std::ios::binary );
             if( ! imfile.is_open() )            //File not exist or busy
                 return NULL;
             //Check for correct extension and format, extract image dimension
@@ -507,10 +506,10 @@ namespace SimpleXlsx
                     || ( ImWidth == 0 ) || ( ImHeight == 0 ) )
                 return NULL;
 
-            _tstringstream IntFileName;
-            IntFileName << _T( "image" ) << m_images.size() + 1 << Ext;
+            std::stringstream IntFileName;
+            IntFileName << "image" << m_images.size() + 1 << Ext;
             image = new CImage( filename, IntFileName.str(), Ptr->ImageType, ImWidth, ImHeight );
-            if( ! m_pathManager->RegisterImage( filename, _T( "/xl/media/" ) + image->InternalName ) )
+            if( ! m_pathManager->RegisterImage( filename, "/xl/media/" + image->InternalName ) )
             {
                 delete image;
                 return NULL;
@@ -518,21 +517,6 @@ namespace SimpleXlsx
             else m_images.push_back( image );   //File successfully copied to temporary folder
         }
         return image;
-    }
-
-    _tstring CWorkbook::NormalizeSheetName( const _tstring & title )
-    {
-        _tstring Result = title;
-        for( _tstring::iterator it = Result.begin(); it != Result.end(); it++ )
-            if( ( * it == _T( '\\' ) ) || ( * it == _T( '/' ) ) ||
-                    ( * it == _T( '[' ) )  || ( * it == _T( ']' ) ) ||
-                    ( * it == _T( '*' ) )  || ( * it == _T( ':' ) ) ||
-                    ( * it == _T( '?' ) ) )
-            {
-                Result.replace( it, it + 1, 1, _T( '_' ) );
-            }
-        if( Result.length() > 31 ) Result.resize( 31 ); // 31 - is a max length of sheet name
-        return Result;
     }
 
     // ****************************************************************************
@@ -548,7 +532,7 @@ namespace SimpleXlsx
             std::strftime( UserTime, MAX_USER_TIME_LENGTH, "%Y-%m-%dT%H:%M:%SZ", std::localtime( & t ) ) ;
 
             // [- zip/docProps/core.xml
-            XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/docProps/core.xml" ) ) );
+            XMLWriter xmlw( m_pathManager->RegisterXML( "/docProps/core.xml" ) );
             xmlw.Tag( "cp:coreProperties" ).Attr( "xmlns:cp", ns_cp ).Attr( "xmlns:dc", ns_dc );
             xmlw.Attr( "xmlns:dcterms", ns_dcterms ).Attr( "xmlns:dcmitype", ns_dcmitype ).Attr( "xmlns:xsi", ns_xsi );
             xmlw.TagOnlyContent( "dc:creator", m_UserName );
@@ -560,7 +544,7 @@ namespace SimpleXlsx
         }
         {
             // [- zip/_rels/.rels
-            XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/_rels/.rels" ) ) );
+            XMLWriter xmlw( m_pathManager->RegisterXML( "/_rels/.rels" ) );
             xmlw.Tag( "Relationships" ).Attr( "xmlns", ns_relationships );
             const char * Node = "Relationship";
             xmlw.TagL( Node ).Attr( "Id", "rId3" ).Attr( "Type", type_app ).Attr( "Target", "docProps/app.xml" ).EndL();
@@ -579,7 +563,7 @@ namespace SimpleXlsx
     bool CWorkbook::SaveContentType()
     {
         // [- zip/[Content_Types].xml
-        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/[Content_Types].xml" ) ) );
+        XMLWriter xmlw( m_pathManager->RegisterXML( "/[Content_Types].xml" ) );
         xmlw.Tag( "Types" ).Attr( "xmlns", ns_content_types );
         xmlw.TagL( "Default" ).Attr( "Extension", "rels" ).Attr( "ContentType", content_rels ).EndL();
         xmlw.TagL( "Default" ).Attr( "Extension", "xml" ).Attr( "ContentType", content_xml ).EndL();
@@ -589,26 +573,26 @@ namespace SimpleXlsx
         bool bFormula = false;
         for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
         {
-            _tstringstream PropValue;
+            std::stringstream PropValue;
             PropValue << "/xl/worksheets/sheet" << ( * it )->GetIndex() << ".xml";
             xmlw.TagL( "Override" ).Attr( "PartName", PropValue.str() ).Attr( "ContentType", content_sheet ).EndL();
             if( ( * it )->IsThereFormula() ) bFormula = true;
         }
         if( bFormula )
         {
-            xmlw.TagL( "Override" ).Attr( "PartName", _tstring( _T( "/xl/calcChain.xml" ) ) ).Attr( "ContentType", content_chain ).EndL();
+            xmlw.TagL( "Override" ).Attr( "PartName", "/xl/calcChain.xml" ).Attr( "ContentType", content_chain ).EndL();
             if( ! SaveChain() ) return false;
         }
 
         for( std::vector<CChartsheet *>::const_iterator it = m_chartsheets.begin(); it != m_chartsheets.end(); it++ )
         {
-            _tstringstream PropValue;
+            std::stringstream PropValue;
             PropValue << "/xl/chartsheets/sheet" << ( * it )->GetIndex() << ".xml";
             xmlw.TagL( "Override" ).Attr( "PartName", PropValue.str() ).Attr( "ContentType", content_chartsheet ).EndL();
         }
 
-        xmlw.TagL( "Override" ).Attr( "PartName", _tstring( _T( "/xl/theme/theme1.xml" ) ) ).Attr( "ContentType", content_theme ).EndL();
-        xmlw.TagL( "Override" ).Attr( "PartName", _tstring( _T( "/xl/styles.xml" ) ) ).Attr( "ContentType", content_styles ).EndL();
+        xmlw.TagL( "Override" ).Attr( "PartName", "/xl/theme/theme1.xml" ).Attr( "ContentType", content_theme ).EndL();
+        xmlw.TagL( "Override" ).Attr( "PartName", "/xl/styles.xml" ).Attr( "ContentType", content_styles ).EndL();
 
         if( ! m_sharedStrings.empty() )
             xmlw.TagL( "Override" ).Attr( "PartName", "/xl/sharedStrings.xml" ).Attr( "ContentType", content_sharedStr ).EndL();
@@ -616,13 +600,13 @@ namespace SimpleXlsx
         for( std::vector<CDrawing *>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++ )
             if( ( * it )->IsEmpty() == false )
             {
-                _tstringstream PropValue;
+                std::stringstream PropValue;
                 PropValue << "/xl/drawings/drawing" << ( * it )->GetIndex() << ".xml";
                 xmlw.TagL( "Override" ).Attr( "PartName", PropValue.str() ).Attr( "ContentType", content_drawing ).EndL();
             }
         for( std::vector<CChart *>::const_iterator it = m_charts.begin(); it != m_charts.end(); it++ )
         {
-            _tstringstream PropValue;
+            std::stringstream PropValue;
             PropValue << "/xl/charts/chart" << ( * it )->GetIndex() << ".xml";
             xmlw.TagL( "Override" ).Attr( "PartName", PropValue.str() ).Attr( "ContentType", content_chart ).EndL();
         }
@@ -635,15 +619,15 @@ namespace SimpleXlsx
             {
                 if( ( * it )->IsThereComment() )
                 {
-                    _tstringstream Temp;
+                    std::stringstream Temp;
                     Temp << "/xl/comments" << ( * it )->GetIndex() << ".xml";
                     xmlw.TagL( "Override" ).Attr( "PartName", Temp.str() ).Attr( "ContentType", content_comment ).EndL();
                 }
             }
         }
 
-        xmlw.TagL( "Override" ).Attr( "PartName", _tstring( _T( "/docProps/core.xml" ) ) ).Attr( "ContentType", content_core ).EndL();
-        xmlw.TagL( "Override" ).Attr( "PartName", _tstring( _T( "/docProps/app.xml" ) ) ).Attr( "ContentType", content_app ).EndL();
+        xmlw.TagL( "Override" ).Attr( "PartName", "/docProps/core.xml" ).Attr( "ContentType", content_core ).EndL();
+        xmlw.TagL( "Override" ).Attr( "PartName", "/docProps/app.xml" ).Attr( "ContentType", content_app ).EndL();
 
         xmlw.End( "Types" );
         // zip/[ContentTypes].xml -]
@@ -661,7 +645,7 @@ namespace SimpleXlsx
         size_t nCharts = m_chartsheets.size();
         size_t nVectorSize = ( nCharts > 0 ) ? 4 : 2;
 
-        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/docProps/app.xml" ) ) );
+        XMLWriter xmlw( m_pathManager->RegisterXML( "/docProps/app.xml" ) );
         xmlw.Tag( "Properties" ).Attr( "xmlns", ns_doc_prop ).Attr( "xmlns:vt", ns_vt );
         xmlw.TagOnlyContent( "Application", "Microsoft Excel" );
         xmlw.TagOnlyContent( "DocSecurity", 0 );
@@ -681,7 +665,7 @@ namespace SimpleXlsx
         for( size_t i = 0; i < nSheets; i++ )
             xmlw.TagOnlyContent( "vt:lpstr", m_worksheets[ i ]->GetTitle() );
         for( size_t i = 0; i < nCharts; i++ )
-            //xmlw.TagOnlyContent( "vt:lpstr", m_chartsheets[ i ]->GetTitle() );
+            //xmlw.TagOnlyContent( "vt:lpstr", m_chartsheets[ i ]->Chart().GetTitle() );
             xmlw.TagOnlyContent( "vt:lpstr", m_chartsheets[ i ]->Chart().GetTitle() );
         xmlw.End( "vt:vector" ).End( "TitlesOfParts" );
 
@@ -702,7 +686,7 @@ namespace SimpleXlsx
     bool CWorkbook::SaveTheme()
     {
         // [- zip/xl/theme/theme1.xml
-        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/theme/theme1.xml" ) ) );
+        XMLWriter xmlw( m_pathManager->RegisterXML( "/xl/theme/theme1.xml" ) );
         xmlw.Tag( "a:theme" ).Attr( "xmlns:a", ns_a ).Attr( "name", "Office Theme" );
         xmlw.Tag( "a:themeElements" );
 
@@ -875,7 +859,7 @@ namespace SimpleXlsx
     bool CWorkbook::SaveStyles()
     {
         // [- zip/xl/styles.xml
-        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/styles.xml" ) ) );
+        XMLWriter xmlw( m_pathManager->RegisterXML( "/xl/styles.xml" ) );
         xmlw.Tag( "styleSheet" ).Attr( "xmlns", ns_book ).Attr( "xmlns:mc", ns_mc ).Attr( "mc:Ignorable", "x14ac" ).Attr( "xmlns:x14ac", ns_x14ac );
 
         AddNumberFormats( xmlw );
@@ -1100,7 +1084,6 @@ namespace SimpleXlsx
     {
 #ifdef _WIN32
         //Work directly with WinAPI because MinGW not working properly with std::locale...
-#ifdef _UNICODE
         setlocale( LC_ALL, "" );
         struct lconv * lc = localeconv();
         if( lc == NULL ) return "";
@@ -1117,21 +1100,9 @@ namespace SimpleXlsx
         if( Utf8BufSize == 0 ) return "";
         return SingleBuf.data();
 #else
-        struct lconv * lc = localeconv();
-        if( lc == NULL ) return "";
-        return std::string( lc->currency_symbol );
-#endif
-
-#else
-
         std::locale loc( "" );
-#ifdef _UNICODE
         std::wstring CurrencySymbol = std::use_facet<std::moneypunct<wchar_t> >( loc ).curr_symbol();
         return UTF8Encoder::From_wstring( CurrencySymbol );
-#else
-        return std::use_facet<std::moneypunct<char> >( loc ).curr_symbol();
-#endif
-
 #endif
     }
 
@@ -1311,7 +1282,7 @@ namespace SimpleXlsx
     bool CWorkbook::SaveChain()
     {
         // [- zip/xl/calcChain.xml
-        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/calcChain.xml" ) ) );
+        XMLWriter xmlw( m_pathManager->RegisterXML( "/xl/calcChain.xml" ) );
         xmlw.Tag( "calcChain" ).Attr( "xmlns", ns_book );
         for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
         {
@@ -1380,8 +1351,8 @@ namespace SimpleXlsx
         assert( ! comments.empty() );
         {
             // [- zip/xl/commentsN.xml
-            _tstringstream FileName;
-            FileName << _T( "/xl/comments" ) << comments[ 0 ]->sheetIndex << _T( ".xml" );
+            std::stringstream FileName;
+            FileName << "/xl/comments" << comments[ 0 ]->sheetIndex << ".xml";
 
             XMLWriter xmlw( m_pathManager->RegisterXML( FileName.str() ) );
             xmlw.Tag( "comments" ).Attr( "xmlns", ns_book );
@@ -1393,8 +1364,8 @@ namespace SimpleXlsx
         }
         {
             // [- zip/xl/drawings/vmlDrawingN.xml
-            _tstringstream FileName;
-            FileName << _T( "/xl/drawings/vmlDrawing" ) << comments[ 0 ]->sheetIndex << _T( ".vml" );
+            std::stringstream FileName;
+            FileName << "/xl/drawings/vmlDrawing" << comments[ 0 ]->sheetIndex << ".vml";
 
             XMLWriter xmlw( m_pathManager->RegisterXML( FileName.str() ) );
             xmlw.Tag( "xml" ).Attr( "xmlns:v", "urn:schemas-microsoft-com:vml" );
@@ -1427,7 +1398,7 @@ namespace SimpleXlsx
     void CWorkbook::AddComment( XMLWriter & xmlw, const Comment & comment ) const
     {
         xmlw.Tag( "comment" ).Attr( "ref", comment.cellRef.ToString() ).Attr( "authorId", 0 ).Tag( "text" );
-        for( std::list<std::pair<Font, _tstring> >::const_iterator it = comment.contents.begin(); it != comment.contents.end(); it++ )
+        for( std::list<std::pair<Font, UniString> >::const_iterator it = comment.contents.begin(); it != comment.contents.end(); it++ )
         {
             xmlw.Tag( "r" ).Tag( "rPr" );
             AddFontInfo( xmlw, it->first, "rFont", 1 );
@@ -1444,7 +1415,7 @@ namespace SimpleXlsx
     // ****************************************************************************
     void CWorkbook::AddCommentDrawing( XMLWriter & xmlw, const Comment & comment )
     {
-        _tstringstream IdValue, StyleValue;
+        std::stringstream IdValue, StyleValue;
         IdValue << "_x0000_s" << 1000u + ( ++m_commLastId );
 
         if( ( comment.x >= 0 ) && ( comment.y >= 0 ) && ( comment.width > 0 ) && ( comment.height > 0 ) )
@@ -1455,8 +1426,9 @@ namespace SimpleXlsx
         if( comment.isHidden ) StyleValue << ";visibility:hidden";
 
         bool wrapText = false;
-        for( std::list<std::pair<Font, _tstring> >::const_iterator it = comment.contents.begin(); it != comment.contents.end(); it++ )
-            if( it->second.find( _T( "\n" ) ) != std::string::npos )
+        for( std::list<std::pair<Font, UniString> >::const_iterator it = comment.contents.begin(); it != comment.contents.end(); it++ )
+            //if( it->second.find( "\n" ) != std::string::npos )
+            if( static_cast< std::string >( it->second ).find( "\n" ) != std::string::npos )
             {
                 wrapText = true;
                 break;
@@ -1494,7 +1466,7 @@ namespace SimpleXlsx
         // [- zip/xl/sharedStrings.xml
         if( m_sharedStrings.empty() ) return true;
 
-        XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/sharedStrings.xml" ) ) );
+        XMLWriter xmlw( m_pathManager->RegisterXML( "/xl/sharedStrings.xml" ) );
         xmlw.Tag( "sst" ).Attr( "xmlns", ns_book ).Attr( "count", m_sharedStrings.size() ).Attr( "uniqueCount", m_sharedStrings.size() );
 
         std::vector< std::pair<const std::string, uint64_t> *> pointers_to_hash;
@@ -1520,39 +1492,45 @@ namespace SimpleXlsx
         char szId[ 16 ] = { 0 };
         {
             // [- zip/xl/_rels/workbook.xml.rels
-            XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/_rels/workbook.xml.rels" ) ) );
+            XMLWriter xmlw( m_pathManager->RegisterXML( "/xl/_rels/workbook.xml.rels" ) );
             xmlw.Tag( "Relationships" ).Attr( "xmlns", ns_relationships );
 
             bool bFormula = false;
             for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
             {
-                sprintf( szId, "rId%zu", ( * it )->GetIndex() );
-                _tstringstream PropValue;
+                //sprintf( szId, "rId%zu", ( * it )->GetIndex() );
+                sprintf( szId, "rId%u", unsigned( ( * it )->GetIndex() ) );
+                std::stringstream PropValue;
                 PropValue << "worksheets/sheet" << ( * it )->GetIndex() << ".xml";
                 xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_sheet ).Attr( "Target", PropValue.str() ).EndL();
                 if( ( * it )->IsThereFormula() ) bFormula = true;
             }
             for( std::vector<CChartsheet *>::const_iterator it = m_chartsheets.begin(); it != m_chartsheets.end(); it++ )
             {
-                sprintf( szId, "rId%zu", ( * it )->GetIndex() );
-                _tstringstream PropValue;
+                //sprintf( szId, "rId%zu", ( * it )->GetIndex() );
+                sprintf( szId, "rId%u", unsigned( ( * it )->GetIndex() ) );
+                std::stringstream PropValue;
                 PropValue << "chartsheets/sheet" << ( * it )->GetIndex() << ".xml";
                 xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_chartsheet ).Attr( "Target", PropValue.str() ).EndL();
             }
             size_t id = m_sheetId;
             if( bFormula )
             {
-                sprintf( szId, "rId%zu", id++ );
+                //sprintf( szId, "rId%zu", id++ );
+                sprintf( szId, "rId%u", unsigned( id++ ) );
                 xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_chain ).Attr( "Target", "calcChain.xml" ).EndL();
             }
             if( ! m_sharedStrings.empty() )
             {
-                sprintf( szId, "rId%zu", id++ );
+                //sprintf( szId, "rId%zu", id++ );
+                sprintf( szId, "rId%u", unsigned( id++ ) );
                 xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_sharedStr ).Attr( "Target", "sharedStrings.xml" ).EndL();
             }
-            sprintf( szId, "rId%zu", id++ );
+            //sprintf( szId, "rId%zu", id++ );
+            sprintf( szId, "rId%u", unsigned( id++ ) );
             xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_style ).Attr( "Target", "styles.xml" ).EndL();
-            sprintf( szId, "rId%zu", id++ );
+            //sprintf( szId, "rId%zu", id++ );
+            sprintf( szId, "rId%u", unsigned( id++ ) );
             xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_theme ).Attr( "Target", "theme/theme1.xml" ).EndL();
 
             xmlw.End( "Relationships" );
@@ -1560,7 +1538,7 @@ namespace SimpleXlsx
         }
         {
             // [- zip/xl/workbook.xml
-            XMLWriter xmlw( m_pathManager->RegisterXML( _T( "/xl/workbook.xml" ) ) );
+            XMLWriter xmlw( m_pathManager->RegisterXML( "/xl/workbook.xml" ) );
             xmlw.Tag( "workbook" ).Attr( "xmlns", ns_book ).Attr( "xmlns:r", ns_book_r );
             xmlw.TagL( "fileVersion" ).Attr( "appName", "xl" ).Attr( "lastEdited", 5 );
             /*                  */xmlw.Attr( "lowestEdited", 5 ).Attr( "rupBuild", 9303 ).EndL();
@@ -1577,7 +1555,8 @@ namespace SimpleXlsx
                 //Sheets ordering
                 for( size_t i = 1; i < m_sheetId; i++ )
                 {
-                    sprintf( szId, "rId%zu", i );
+                    //sprintf( szId, "rId%zu", i );
+                    sprintf( szId, "rId%u", unsigned( i ) );
                     bool Found = false;
                     for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
                         if( i == ( * it )->GetIndex() )

@@ -51,15 +51,15 @@ namespace SimpleXlsx
     // [- /xl/drawings/_rels/drawingX.xml.rels
     void CDrawing::SaveDrawingRels()
     {
-        _tstringstream FileName;
-        FileName << _T( "/xl/drawings/_rels/drawing" ) << m_index << _T( ".xml.rels" );
+        std::stringstream FileName;
+        FileName << "/xl/drawings/_rels/drawing" << m_index << ".xml.rels";
 
         XMLWriter xmlw( m_pathManager.RegisterXML( FileName.str() ) );
         xmlw.Tag( "Relationships" ).Attr( "xmlns", ns_relationships );
         int rId = 1;
         for( std::vector<DrawingInfo>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++, rId++ )
         {
-            _tstringstream Target, rIdStream;
+            std::stringstream Target, rIdStream;
             const char * TypeString = NULL;
             switch( ( * it ).AType )
             {
@@ -88,14 +88,14 @@ namespace SimpleXlsx
     // [- /xl/drawings/drawingX.xml
     void CDrawing::SaveDrawing()
     {
-        _tstringstream FileName;
-        FileName << _T( "/xl/drawings/drawing" ) << m_index << _T( ".xml" );
+        std::stringstream FileName;
+        FileName << "/xl/drawings/drawing" << m_index << ".xml";
 
         XMLWriter xmlw( m_pathManager.RegisterXML( FileName.str() ) );
         xmlw.Tag( "xdr:wsDr" ).Attr( "xmlns:xdr", ns_xdr ).Attr( "xmlns:a", ns_a );
 
         int rId = 1;
-        for( std::vector<DrawingInfo>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++, rId++ )
+        for( std::vector< DrawingInfo >::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++, rId++ )
         {
             switch( ( * it ).AType )
             {
@@ -142,7 +142,7 @@ namespace SimpleXlsx
 
     void CDrawing::SaveChartSection( XMLWriter & xmlw, CChart * chart, int rId )
     {
-        _tstringstream rIdStream;
+        std::stringstream rIdStream;
         rIdStream << "rId" << rId;
 
         xmlw.Tag( "xdr:graphicFrame" ).Attr( "macro", "" ).Tag( "xdr:nvGraphicFramePr" );
@@ -165,7 +165,7 @@ namespace SimpleXlsx
 
     void CDrawing::SaveImageSection( XMLWriter & xmlw, CImage * image, int rId )
     {
-        _tstringstream rIdStream;
+        std::stringstream rIdStream;
         rIdStream << "rId" << rId;
 
         xmlw.Tag( "xdr:pic" ).Tag( "xdr:nvPicPr" );

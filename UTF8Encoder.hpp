@@ -53,7 +53,6 @@ class UTF8Encoder
             }
         }
 
-#ifdef _UNICODE
         static inline std::string From_wstring( const std::wstring & Source )
         {
             std::string Result;
@@ -61,7 +60,6 @@ class UTF8Encoder
                 Result.append( From_wchar_t( * iter ) );
             return Result;
         }
-#endif
 };
 
 

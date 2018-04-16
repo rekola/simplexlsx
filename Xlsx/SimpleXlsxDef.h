@@ -32,28 +32,81 @@
 #include <vector>
 #include <utility>
 
-#ifdef _WIN32
-#include <tchar.h>
-#else
-#include "../tchar.h"
-#endif  // _WIN32
-
-#ifdef _UNICODE
-
 #include "../UTF8Encoder.hpp"
 
-typedef std::wstring		_tstring;
-typedef std::wostringstream	_tstringstream;
-#else
-
-typedef std::string			_tstring;
-typedef std::ostringstream	_tstringstream;
-#endif // _UNICODE
-
-#define SIMPLE_XLSX_VERSION	_T("0.27")
+#define SIMPLE_XLSX_VERSION	"0.28"
 
 namespace SimpleXlsx
 {
+    // Helper class for simultaneous work with std::string and std::wstring
+    class UniString
+    {
+        public:
+            UniString() {}
+
+            UniString( const char * Str ) : m_string( Str ), m_wstring( m_string.begin(), m_string.end() ) {}
+            UniString( const std::string & Str ) : m_string( Str ), m_wstring( m_string.begin(), m_string.end() ) {}
+
+            UniString( const wchar_t * Str ) : m_wstring( Str )
+            {
+                m_string = UTF8Encoder::From_wstring( m_wstring );
+            }
+            UniString( const std::wstring & Str ) : m_wstring( Str )
+            {
+                m_string = UTF8Encoder::From_wstring( m_wstring );
+            }
+
+            // *INDENT-OFF*   For AStyle tool
+            inline bool empty() const   {   return m_string.empty();    }
+
+            inline operator const std::string & () const    {   return m_string;    }
+            inline operator const std::wstring & () const   {   return m_wstring;   }
+
+            inline bool operator==( const std::string & other ) const   {   return m_string == other;   }
+            inline bool operator!=( const std::string & other ) const   {   return !( *this == other ); }
+            inline bool operator==( const std::wstring & other ) const  {   return m_wstring == other;  }
+            inline bool operator!=( const std::wstring & other ) const  {   return !( *this == other ); }
+            inline bool operator==( const UniString & other ) const     {   return *this == other.m_string; }
+            inline bool operator!=( const UniString & other ) const     {   return !( *this == other ); }
+            // *INDENT-ON*   For AStyle tool
+
+            UniString & operator=( const char * other )
+            {
+                m_string = other;
+                m_wstring = std::wstring( m_string.begin(), m_string.end() );
+                return * this;
+            }
+            UniString & operator=( const std::string & other )
+            {
+                m_string = other;
+                m_wstring = std::wstring( m_string.begin(), m_string.end() );
+                return * this;
+            }
+            UniString & operator=( const wchar_t * other )
+            {
+                m_wstring = other;
+                m_string = UTF8Encoder::From_wstring( other );
+                return * this;
+            }
+            UniString & operator=( const std::wstring & other )
+            {
+                m_wstring = other;
+                m_string = UTF8Encoder::From_wstring( other );
+                return * this;
+            }
+
+            friend std::ostream & operator<<( std::ostream & os, const UniString & str );
+
+        private:
+            std::string     m_string;
+            std::wstring    m_wstring;
+    };
+
+    inline std::ostream & operator<<( std::ostream & os, const UniString & str )
+    {
+        os << str.m_string;
+        return os;
+    }
 
     /// @brief	Possible chart types
     enum EChartTypes
@@ -172,9 +225,9 @@ namespace SimpleXlsx
     class Font
     {
         public:
-            _tstring name;		///< name font name (there is no enumeration or preset values, it should be used carefully)
-            std::string color;	///< color color format: AARRGGBB - (alpha, red, green, blue). If empty default theme is used
-            int32_t size;		///< size font size
+            UniString name;		///< font name (there is no enumeration or preset values, it should be used carefully)
+            std::string color;	///< color format: AARRGGBB - (alpha, red, green, blue). If empty default theme is used
+            int32_t size;		///< font size
             int32_t attributes;	///< combination of additinal font flags (EFontAttributes)
             bool theme;			///< theme if true then color is not taken into account
 
@@ -187,7 +240,7 @@ namespace SimpleXlsx
             void Clear()
             {
                 size = 11;
-                name = _T( "Calibri" );
+                name = "Calibri";
                 theme = true;
                 color = "";
                 attributes = FONT_NORMAL;
@@ -395,9 +448,6 @@ namespace SimpleXlsx
                     div /= iAlphLen;
                 };
                 //return strCol + std::to_string( row );
-                /*char buf[ 4 * sizeof( row ) ] = { 0 };
-                std::sprintf( buf, "%u", row );
-                return strCol + buf;*/
                 std::ostringstream ConvStream;
                 ConvStream << row;
                 return strCol + ConvStream.str();
@@ -448,7 +498,6 @@ namespace SimpleXlsx
                 return *this;
             }
 
-#ifdef _UNICODE
             CellDataStr( const std::wstring & _str ) : value( UTF8Encoder::From_wstring( _str ) ), style_id( 0 ) {}
             CellDataStr( const std::wstring & _str, size_t _style_id ) : value( UTF8Encoder::From_wstring( _str ) ), style_id( _style_id ) {}
 
@@ -463,7 +512,6 @@ namespace SimpleXlsx
                 value = UTF8Encoder::From_wstring( _str );
                 return *this;
             }
-#endif
     };	///< cell data:style pair
 
     class CellDataTime
@@ -592,7 +640,7 @@ namespace SimpleXlsx
     struct Comment
     {
         size_t sheetIndex;									///< sheetIndex internal page index (must not be changed manually)
-        std::list<std::pair<Font, _tstring> > contents;     ///< contents set of contents with specified fonts
+        std::list<std::pair<Font, UniString> > contents;    ///< contents set of contents with specified fonts
         CellCoord cellRef;									///< cellRef reference to the cell
         std::string fillColor;								///< fillColor comment box background colour (format: #RRGGBB)
         bool isHidden;										///< isHidden determines if comments box is hidden
@@ -614,6 +662,11 @@ namespace SimpleXlsx
             isHidden = true;
             x = y = 50;
             width = height = 100;
+        }
+
+        void AddContent( const Font & afont, const UniString & astring )
+        {
+            contents.push_back( std::pair<Font, UniString>( afont, astring ) );
         }
 
         bool operator < ( const Comment & _comm ) const
@@ -826,15 +879,15 @@ namespace SimpleXlsx
                 unknown, gif, jpg, jpeg, png, tif, tiff
             };
 
-            _tstring    LocalPath;      //Path to the file in the system
-            _tstring    InternalName;   //Name of the file in XLSX
+            std::string LocalPath;      //Path to the file in the system
+            std::string InternalName;   //Name of the file in XLSX
             ImageType   Type;           //Image type (extension)
             uint16_t    Width;          //Width of the image
             uint16_t    Height;         //Height of the image
 
             static const uint16_t   PointByPixel = 9525;    // Points count by one pixel
 
-            CImage( const _tstring & LocPath, const _tstring TempPath, ImageType AType, uint16_t AWidth, uint16_t AHeight ) :
+            CImage( const std::string & LocPath, const std::string & TempPath, ImageType AType, uint16_t AWidth, uint16_t AHeight ) :
                 LocalPath( LocPath ), InternalName( TempPath ), Type( AType ), Width( AWidth ), Height( AHeight ) {}
     };
 

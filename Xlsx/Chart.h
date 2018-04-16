@@ -131,7 +131,7 @@ namespace SimpleXlsx
                 CellCoord valAxisFrom;							///< valAxisFrom data range (from cell (row, col), beginning since 0)
                 CellCoord valAxisTo;							///< valAxisTo data range (to cell (row, col), beginning since 0)
 
-                _tstring title;									///< title series title (in the legend)
+                UniString title;								///< title series title (in the legend)
 
                 joinType JoinType;						     	///< JoinType indicates whether series must be joined and smoothed at rendering
                 double LineWidth;                               ///< Like in excell  0.5 ... 3.0 (?)
@@ -143,9 +143,6 @@ namespace SimpleXlsx
                     catSheet = NULL;
                     valSheet = NULL;
                     LineColor = "";
-                    title = _T( "" );
-                    //          SymType = symNone;
-                    //          SymSize=6;
                     JoinType = joinNone;
                     LineWidth = 1.;
                     DashType = dashSolid;
@@ -157,14 +154,14 @@ namespace SimpleXlsx
             struct Axis
             {
                 uint32_t id;			///< axis axis id
-                _tstring name;			///< name axis name (that will be depicted)
+                UniString name;			///< name axis name (that will be depicted)
                 uint32_t nameSize;		///< nameSize font size
                 EPosition pos;			///< pos axis position
                 EGridLines gridLines;	///< gridLines grid detalization
                 EAxisCross cross;		///< cross determines axis position relative to null
                 bool sourceLinked;		///< sourceLinked indicates if axis has at least one linked source
-                _tstring minValue;		///< minValue minimum value for axis (type string is used for generality and processing simplicity)
-                _tstring maxValue;		///< maxValue minimum value for axis (type string is used for generality and processing simplicity)
+                std::string minValue;	///< minValue minimum value for axis (type string is used for generality and processing simplicity)
+                std::string maxValue;	///< maxValue minimum value for axis (type string is used for generality and processing simplicity)
                 int lblSkipInterval;	///< space between two neighbour labels
                 int markSkipInterval;	///< space between two neighbour marks
                 int lblAngle;			///< axis labels angle in degrees
@@ -172,15 +169,14 @@ namespace SimpleXlsx
                 Axis()
                 {
                     id = 0;
-                    name = _T( "" );
                     nameSize = 10;
                     pos = POS_LEFT;
                     gridLines = GRID_NONE;
                     cross = CROSS_AUTO_ZERO;
                     sourceLinked = false;
 
-                    minValue = _T( "" );
-                    maxValue = _T( "" );
+                    minValue = "";
+                    maxValue = "";
 
                     lblSkipInterval = -1;	// auto
                     markSkipInterval = -1;	// auto
@@ -192,7 +188,7 @@ namespace SimpleXlsx
             /// @brief  Structure describes diagramm properties
             struct Diagramm
             {
-                _tstring name;				///< name diagramm name (that will be depicted above the chart)
+                UniString name;				///< name diagramm name (that will be depicted above the chart)
                 uint32_t nameSize;			///< nameSize font size
                 EPosition legend_pos;		///< legend_pos legend position
                 ETableData tableData;		///< tableData table data state
@@ -205,7 +201,6 @@ namespace SimpleXlsx
 
                 Diagramm()
                 {
-                    name = _T( "" );
                     nameSize = 18;
                     legend_pos = POS_RIGHT;
                     tableData = TBL_DATA_NONE;
@@ -229,7 +224,7 @@ namespace SimpleXlsx
             Axis                m_x2Axis;           ///< additional X axis object
             Axis                m_y2Axis;           ///< additional Y axis object
 
-            _tstring         	m_title;            ///< chart sheet title
+            UniString         	m_title;            ///< chart sheet title
 
             PathManager    &    m_pathManager;      ///< reference to XML PathManager
         public:
@@ -239,8 +234,8 @@ namespace SimpleXlsx
             inline size_t   GetIndex() const                    { return m_index; }
 
             // @section    User interface
-            inline _tstring GetTitle() const                    { return m_title;  }
-            inline void SetTitle( const _tstring & title )      { if( ! title.empty() ) m_title = title; }
+            inline const UniString & GetTitle() const           { return m_title;  }
+            inline void SetTitle( const UniString & title )      { if( ! title.empty() ) m_title = title; }
 
             inline EChartTypes GetMainType() const              { return m_diagramm.typeMain; }
             inline void SetMainType( EChartTypes type )         { m_diagramm.typeMain = type; }
@@ -249,7 +244,7 @@ namespace SimpleXlsx
             inline void SetAddType( EChartTypes type )          { m_diagramm.typeAdditional = type; }
 
             inline void SetDiagrammNameSize( uint32_t size )    { m_diagramm.nameSize = size;   }
-            inline void SetDiagrammName( const _tstring & name ){ m_diagramm.name = name;       }
+            inline void SetDiagrammName( const UniString & name ){ m_diagramm.name = name;       }
             inline void SetTableDataState( ETableData state )   { m_diagramm.tableData = state; }
             inline void SetLegendPos( EPosition pos )           { m_diagramm.legend_pos = pos;  }
 
@@ -257,45 +252,45 @@ namespace SimpleXlsx
             inline void SetBarGrouping( EBarGrouping barGroup ) { m_diagramm.barGroup = barGroup;  }
             inline void SetScatterStyle( EScatterStyle style )  { m_diagramm.scatterStyle = style; }
 
-            inline void SetXAxisLblInterval( int value )        { m_xAxis.lblSkipInterval = value;  }
-            inline void SetXAxisMarkInterval( int value )       { m_xAxis.markSkipInterval = value; }
-            inline void SetXAxisLblAngle( int degrees )         { m_xAxis.lblAngle = degrees;       }
-            inline void SetXAxisMin( const _tstring & value )   { m_xAxis.minValue = value;         }
-            inline void SetXAxisMax( const _tstring & value )   { m_xAxis.maxValue = value;         }
-            inline void SetXAxisName( const _tstring & name )   { m_xAxis.name = name;              }
-            inline void SetXAxisNameSize( uint32_t size )       { m_xAxis.nameSize = size;          }
-            inline void SetXAxisPos( EPosition pos )            { m_xAxis.pos = pos;                }
-            inline void SetXAxisGrid( EGridLines state )        { m_xAxis.gridLines = state;        }
-            inline void SetXAxisCross( EAxisCross cross )       { m_xAxis.cross = cross;            }
+            inline void SetXAxisLblInterval( int value )            { m_xAxis.lblSkipInterval = value;  }
+            inline void SetXAxisMarkInterval( int value )           { m_xAxis.markSkipInterval = value; }
+            inline void SetXAxisLblAngle( int degrees )             { m_xAxis.lblAngle = degrees;       }
+            inline void SetXAxisMin( const std::string & value )    { m_xAxis.minValue = value;         }
+            inline void SetXAxisMax( const std::string & value )    { m_xAxis.maxValue = value;         }
+            inline void SetXAxisName( const UniString & name )      { m_xAxis.name = name;              }
+            inline void SetXAxisNameSize( uint32_t size )           { m_xAxis.nameSize = size;          }
+            inline void SetXAxisPos( EPosition pos )                { m_xAxis.pos = pos;                }
+            inline void SetXAxisGrid( EGridLines state )            { m_xAxis.gridLines = state;        }
+            inline void SetXAxisCross( EAxisCross cross )           { m_xAxis.cross = cross;            }
 
 
-            inline void SetYAxisMin( const _tstring & value )   { m_yAxis.minValue = value;         }
-            inline void SetYAxisMax( const _tstring & value )   { m_yAxis.maxValue = value;         }
-            inline void SetYAxisName( const _tstring & name )   { m_yAxis.name = name;              }
-            inline void SetYAxisNameSize( uint32_t size )       { m_yAxis.nameSize = size;          }
-            inline void SetYAxisPos( EPosition pos )            { m_yAxis.pos = pos;                }
-            inline void SetYAxisGrid( EGridLines state )        { m_yAxis.gridLines = state;        }
-            inline void SetYAxisCross( EAxisCross cross )       { m_yAxis.cross = cross;            }
+            inline void SetYAxisMin( const std::string & value )    { m_yAxis.minValue = value;         }
+            inline void SetYAxisMax( const std::string & value )    { m_yAxis.maxValue = value;         }
+            inline void SetYAxisName( const UniString & name )      { m_yAxis.name = name;              }
+            inline void SetYAxisNameSize( uint32_t size )           { m_yAxis.nameSize = size;          }
+            inline void SetYAxisPos( EPosition pos )                { m_yAxis.pos = pos;                }
+            inline void SetYAxisGrid( EGridLines state )            { m_yAxis.gridLines = state;        }
+            inline void SetYAxisCross( EAxisCross cross )           { m_yAxis.cross = cross;            }
 
 
-            inline void SetX2AxisLblInterval( int value )       { m_x2Axis.lblSkipInterval = value; }
-            inline void SetX2AxisMarkInterval( int value )      { m_x2Axis.markSkipInterval = value;}
-            inline void SetX2AxisLblAngle( int degrees )        { m_x2Axis.lblAngle = degrees;      }
-            inline void SetX2AxisMin( const _tstring & value )  { m_x2Axis.minValue = value;        }
-            inline void SetX2AxisMax( const _tstring & value )  { m_x2Axis.maxValue = value;        }
-            inline void SetX2AxisName( const _tstring & name )  { m_x2Axis.name = name;             }
-            inline void SetX2AxisNameSize( uint32_t size )      { m_x2Axis.nameSize = size;         }
-            inline void SetX2AxisPos( EPosition pos )           { m_x2Axis.pos = pos;               }
-            inline void SetX2AxisGrid( EGridLines state )       { m_x2Axis.gridLines = state;       }
-            inline void SetX2AxisCross( EAxisCross cross )      { m_x2Axis.cross = cross;           }
+            inline void SetX2AxisLblInterval( int value )           { m_x2Axis.lblSkipInterval = value; }
+            inline void SetX2AxisMarkInterval( int value )          { m_x2Axis.markSkipInterval = value;}
+            inline void SetX2AxisLblAngle( int degrees )            { m_x2Axis.lblAngle = degrees;      }
+            inline void SetX2AxisMin( const std::string & value )   { m_x2Axis.minValue = value;        }
+            inline void SetX2AxisMax( const std::string & value )   { m_x2Axis.maxValue = value;        }
+            inline void SetX2AxisName( const UniString & name )     { m_x2Axis.name = name;             }
+            inline void SetX2AxisNameSize( uint32_t size )          { m_x2Axis.nameSize = size;         }
+            inline void SetX2AxisPos( EPosition pos )               { m_x2Axis.pos = pos;               }
+            inline void SetX2AxisGrid( EGridLines state )           { m_x2Axis.gridLines = state;       }
+            inline void SetX2AxisCross( EAxisCross cross )          { m_x2Axis.cross = cross;           }
 
-            inline void SetY2AxisMin( const _tstring & value )  { m_y2Axis.minValue = value;        }
-            inline void SetY2AxisMax( const _tstring & value )  { m_y2Axis.maxValue = value;        }
-            inline void SetY2AxisName( const _tstring & name )  { m_y2Axis.name = name;             }
-            inline void SetY2AxisNameSize( uint32_t size )      { m_y2Axis.nameSize = size;         }
-            inline void SetY2AxisPos( EPosition pos )           { m_y2Axis.pos = pos;               }
-            inline void SetY2AxisGrid( EGridLines state )       { m_y2Axis.gridLines = state;       }
-            inline void SetY2AxisCross( EAxisCross cross )      { m_y2Axis.cross = cross;           }
+            inline void SetY2AxisMin( const std::string & value )   { m_y2Axis.minValue = value;        }
+            inline void SetY2AxisMax( const std::string & value )   { m_y2Axis.maxValue = value;        }
+            inline void SetY2AxisName( const UniString & name )     { m_y2Axis.name = name;             }
+            inline void SetY2AxisNameSize( uint32_t size )          { m_y2Axis.nameSize = size;         }
+            inline void SetY2AxisPos( EPosition pos )               { m_y2Axis.pos = pos;               }
+            inline void SetY2AxisGrid( EGridLines state )           { m_y2Axis.gridLines = state;       }
+            inline void SetY2AxisCross( EAxisCross cross )          { m_y2Axis.cross = cross;           }
 ///< Patch to val/cat issue E.N.
             inline void SetXAxisToCat(const bool set2val=false )       { m_xAxis.isVal = set2val;  }
             inline void SetYAxisToCat(const bool set2val=false )       { m_yAxis.isVal = set2val;  }
@@ -317,7 +312,7 @@ namespace SimpleXlsx
 
             bool Save();
 
-            void AddTitle( XMLWriter & xmlw, const _tstring & name, uint32_t size, bool vertPos );
+            void AddTitle( XMLWriter & xmlw, const UniString & name, uint32_t size, bool vertPos );
             void AddTableData( XMLWriter & xmlw );
             void AddLegend( XMLWriter & xmlw );
             void AddXAxis( XMLWriter & xmlw, const Axis & x, uint32_t crossAxisId = 0 );
@@ -327,7 +322,7 @@ namespace SimpleXlsx
             void AddBarChart( XMLWriter & xmlw, Axis & xAxis, uint32_t yAxisId, const std::vector<Series> & series, size_t firstSeriesId, EBarDirection barDir, EBarGrouping barGroup );
             void AddScatterChart( XMLWriter & xmlw, uint32_t xAxisId, uint32_t yAxisId, const std::vector<Series> & series, size_t firstSeriesId, EScatterStyle style );
 
-            static _tstring CellRangeString( const _tstring & Title, const CellCoord & CellFrom, const CellCoord & szCellTo );
+            static std::string CellRangeString( const std::string & Title, const CellCoord & CellFrom, const CellCoord & szCellTo );
 
             static inline char GetCharForPos( EPosition Pos, char DefaultChar )
             {
