@@ -101,6 +101,79 @@ namespace SimpleXlsx
                 SCATTER_POINT
             };
 
+            /// @brief The enumeration determines empty cell display method
+            enum EEmptyCellsDisplayMethod
+            {
+                EMPTY_CELLS_DISP_GAPS = 0,
+                EMPTY_CELLS_DISP_ZERO,
+                EMPTY_CELLS_DISP_CONNECT
+            };
+
+            /// @brief The enumeration determines plot and chart area fill style
+            enum EPlotAreaFillStyle
+            {
+                PLOT_AREA_FILL_NONE = 0,
+                PLOT_AREA_FILL_SOLID,
+                PLOT_AREA_FILL_GRADIENT,
+                //PLOT_AREA_FILL_PICTURE,
+                PLOT_AREA_FILL_PATTERN
+            };
+
+            /// @brief The enumeration determines gradient fill direction (for radial and rectangular types)
+            enum EGradientFillDirection
+            {
+                FROM_BOTTOM_RIGHT_CORNER, FROM_BOTTOM_LEFT_CORNER, FROM_CENTER,
+                FROM_TOP_RIGHT_CORNER, FROM_TOP_LEFT_CORNER
+            };
+
+            /// @brief The enumeration determines pattern fill style
+            enum EPatternFillStyle
+            {
+                PERCENT_5, PERCENT_10, PERCENT_20, PERCENT_25, PERCENT_30, PERCENT_40,
+                PERCENT_50, PERCENT_60, PERCENT_70, PERCENT_75, PERCENT_80, PERCENT_90,
+
+                LIGHT_DOWNWARD_DIAGONAL, DARK_DOWNWARD_DIAGONAL, WIDE_DOWNWARD_DIAGONAL,
+                LIGHT_UPWARD_DIAGONAL, DARK_UPWARD_DIAGONAL, WIDE_UPWARD_DIAGONAL,
+
+                LIGHT_VERTICAL, NARROW_VERTICAL, DARK_VERTICAL, LIGHT_HORIZONTAL, NARROW_HORIZONTAL, DARK_HORIZONTAL,
+
+                DASHED_DOWNWARD_DIAGONAL, DASHED_UPWARD_DIAGONAL, DASHED_HORIZONTAL, DASHED_VERTICAL, SMALL_CONFETTI, LARGE_CONFETTI,
+
+                ZIG_ZAG, WAVE, DIAGONAL_BRICK, HORIZONTAL_BRICK, WEAVE, PLAID,
+
+                DIVOT, DOTTED_GRID, DOTTED_DIAMOND, SHINGLE, TRELLIS, SPHERE,
+
+                SMALL_GRID, LARGE_GRID, SMALL_CHECKER_BOARD, LARGE_CHECKER_BOARD, OUTLINED_DIAMOND, SOLID_DIAMOND
+            };
+
+            /// @brief  Structure with color points to setup a gradient fill of chart
+            struct GradientStops
+            {
+                private:
+                    // int - Pos in Gradient stops from 0 to 100 in percent
+                    // std::string - Color RGB string like "FF00FF"
+                    typedef typename std::map< int, std::string > Container;
+
+                    Container m_Points;
+
+                public:
+                    typedef typename Container::const_iterator const_iterator;
+
+                    // *INDENT-OFF*   For AStyle tool
+                    inline const_iterator begin() const { return m_Points.begin(); }
+                    inline const_iterator end() const   { return m_Points.end(); }
+
+                    inline bool IsValid() const         { return m_Points.size() >= 2; }
+                    inline void Clear()                 { m_Points.clear(); }
+                    // *INDENT-ON*   For AStyle tool
+
+                    inline void Add( int Percent, const std::string & Color )
+                    {
+                        assert( ( Percent >= 0 ) && ( Percent <= 100 ) );
+                        m_Points.insert( Container::value_type( Percent, Color ) );
+                    }
+            };
+
             /// @brief  Structure to setup a chart
             /// @note	category sheet parameters can left unset, then a default category axis is used
             /// @note	if values` sheet is unset the series will not be added to the list of charts
@@ -138,6 +211,18 @@ namespace SimpleXlsx
                 std::string LineColor;                          ///< LineGolor RGB string like "FF00FF"
                 dashType DashType;							    ///< DashType indicates whether line will be rendered dashed or not
 
+                // Specific for bar chart
+                enum BarFillStyle
+                {
+                    BAR_FILL_NONE = 0,
+                    BAR_FILL_SOLID,
+                    BAR_FILL_AUTOMATIC
+                };
+                BarFillStyle    barFillStyle;
+                bool            barInvertIfNegative;            ///< Invert fill if negative data value
+                std::string     barInvertedColor;               ///< Golor RGB string like "FF00FF" if barInvertIfNegative = true
+
+
                 Series()
                 {
                     catSheet = NULL;
@@ -146,8 +231,13 @@ namespace SimpleXlsx
                     JoinType = joinNone;
                     LineWidth = 1.;
                     DashType = dashSolid;
+
+                    barFillStyle = BAR_FILL_AUTOMATIC;
+                    barInvertIfNegative = true;
+                    barInvertedColor = "";
                 }
             };
+
         private:
             /// @brief  Structure that describes axis properties
             /// @note	gridLines and sourceLinked properties will have no effect at using with additional axes because of Microsoft Open XML format restrictions
@@ -185,6 +275,73 @@ namespace SimpleXlsx
                 }
             };
 
+            /// @brief  Structure to setup a gradient fill of chart
+            struct GradientFill
+            {
+                enum fillType { linear, radial, rectangular, path };
+
+                fillType        FillType;
+                EGradientFillDirection   FillDirection;
+                double          LinearAngle;        // 0 ... 359.9 degree (clockwise)
+                bool            LinearScaleAngle;   // Specifies whether the angle scales with the fill region
+
+                GradientStops   ColorPoints;
+
+                GradientFill()
+                {
+                    FillType = linear;
+                    FillDirection = FROM_CENTER;
+                    LinearAngle = 0;
+                    LinearScaleAngle = true;
+                }
+            };
+
+            /// @brief  Structure describing the filling for the chart
+            struct AreaFill
+            {
+                EPlotAreaFillStyle Style;
+                std::string SolidColor;         ///< SolidlColor RGB string like "FF00FF" for solid fill
+                GradientFill Gradient;          ///< Params for a gradient fill
+                EPatternFillStyle Pattern;
+                std::string PatternFgColor, PatternBgColor;
+
+                void SetLinearGradient( double Angle, bool ScaleAngle, const GradientStops & Stops )
+                {
+                    Style = PLOT_AREA_FILL_GRADIENT;
+                    Gradient.FillType = GradientFill::linear;
+                    Gradient.LinearAngle = Angle;
+                    Gradient.LinearScaleAngle = ScaleAngle;
+                    Gradient.ColorPoints = Stops;
+                }
+                void SetRadialAndRectGradient( GradientFill::fillType Type, EGradientFillDirection Dir, const GradientStops & Stops )
+                {
+                    Style = PLOT_AREA_FILL_GRADIENT;
+                    Gradient.FillType = Type;
+                    Gradient.FillDirection = Dir;
+                    Gradient.ColorPoints = Stops;
+                }
+                void SetPathGradient( const GradientStops & Stops )
+                {
+                    Style = PLOT_AREA_FILL_GRADIENT;
+                    Gradient.FillType = GradientFill::path;
+                    Gradient.ColorPoints = Stops;
+                }
+
+                void SetPattern( EPatternFillStyle PatternStyle, const std::string & FgColor, const std::string & BgColor )
+                {
+                    Style = PLOT_AREA_FILL_PATTERN;
+                    Pattern = PatternStyle;
+                    PatternFgColor = FgColor;
+                    PatternBgColor = BgColor;
+                }
+
+                AreaFill()
+                {
+                    Style = PLOT_AREA_FILL_NONE;
+                    SolidColor = "FFFFFF";
+                }
+            };
+
             /// @brief  Structure describes diagramm properties
             struct Diagramm
             {
@@ -199,6 +356,11 @@ namespace SimpleXlsx
                 EBarGrouping barGroup;
                 EScatterStyle scatterStyle;
 
+                EEmptyCellsDisplayMethod emptyCellsDisplayMethod;
+                bool showDataFromHiddenCells;
+
+                AreaFill plotAreaFill, chartAreaFill;
+
                 Diagramm()
                 {
                     nameSize = 18;
@@ -210,6 +372,8 @@ namespace SimpleXlsx
                     barDir = BAR_DIR_VERTICAL;
                     barGroup = BAR_GROUP_CLUSTERED;
                     scatterStyle = SCATTER_POINT;
+                    emptyCellsDisplayMethod = EMPTY_CELLS_DISP_GAPS;
+                    showDataFromHiddenCells = false;
                 }
             };
 
@@ -227,6 +391,7 @@ namespace SimpleXlsx
             UniString         	m_title;            ///< chart sheet title
 
             PathManager    &    m_pathManager;      ///< reference to XML PathManager
+
         public:
             // *INDENT-OFF*   For AStyle tool
 
@@ -235,13 +400,91 @@ namespace SimpleXlsx
 
             // @section    User interface
             inline const UniString & GetTitle() const           { return m_title;  }
-            inline void SetTitle( const UniString & title )      { if( ! title.empty() ) m_title = title; }
+            inline void SetTitle( const UniString & title )     { if( ! title.empty() ) m_title = title; }
 
             inline EChartTypes GetMainType() const              { return m_diagramm.typeMain; }
             inline void SetMainType( EChartTypes type )         { m_diagramm.typeMain = type; }
 
             inline EChartTypes GetAddType() const               { return m_diagramm.typeAdditional; }
             inline void SetAddType( EChartTypes type )          { m_diagramm.typeAdditional = type; }
+
+            inline EEmptyCellsDisplayMethod GetEmptyCellsDisplayingMethod() const
+                                                                { return m_diagramm.emptyCellsDisplayMethod; }
+            inline void SetEmptyCellsDisplayingMethod( EEmptyCellsDisplayMethod emptyCellsDisplayMethod )
+                                                                { m_diagramm.emptyCellsDisplayMethod = emptyCellsDisplayMethod; }
+
+            inline bool GetShowDataFromHiddenCells() const      { return m_diagramm.showDataFromHiddenCells; }
+            inline void SetShowDataFromHiddenCells( bool show ) { m_diagramm.showDataFromHiddenCells = show; }
+
+
+
+            inline void SetPlotAreaFillNone()                   { m_diagramm.plotAreaFill.Style = PLOT_AREA_FILL_NONE; }
+            inline void SetPlotAreaFillSolid( std::string fillColor )
+                                                                {
+                                                                  m_diagramm.plotAreaFill.Style = PLOT_AREA_FILL_SOLID;
+                                                                  m_diagramm.plotAreaFill.SolidColor = fillColor;
+                                                                }
+            // Angle - 0 ... 359.9 degree (clockwise)
+            // ScaleAngle - Specifies whether the angle scales with the fill region )
+            inline void SetPlotAreaFillGradientLinear( double Angle, const GradientStops & Stops, bool ScaleAngle = true )
+                                                                {
+                                                                  assert( Stops.IsValid() );
+                                                                  m_diagramm.plotAreaFill.SetLinearGradient( Angle, ScaleAngle, Stops );
+                                                                }
+            inline void SetPlotAreaFillGradientRadial( EGradientFillDirection Dir, const GradientStops & Stops )
+                                                                {
+                                                                  assert( Stops.IsValid() );
+                                                                  m_diagramm.plotAreaFill.SetRadialAndRectGradient( GradientFill::radial, Dir, Stops );
+                                                                }
+            inline void SetPlotAreaFillGradientRectangular( EGradientFillDirection Dir, const GradientStops & Stops )
+                                                                {
+                                                                  assert( Stops.IsValid() );
+                                                                  m_diagramm.plotAreaFill.SetRadialAndRectGradient( GradientFill::rectangular, Dir, Stops );
+                                                                }
+            inline void SetPlotAreaFillGradientPath( const GradientStops & Stops )
+                                                                {
+                                                                  assert( Stops.IsValid() );
+                                                                  m_diagramm.plotAreaFill.SetPathGradient( Stops );
+                                                                }
+            inline void SetPlotAreaFillPattern( EPatternFillStyle PatternStyle, const std::string & FgColor, const std::string & BgColor )
+                                                                {
+                                                                  m_diagramm.plotAreaFill.SetPattern( PatternStyle, FgColor, BgColor );
+                                                                }
+
+
+            inline void SetChartAreaFillNone()                  { m_diagramm.chartAreaFill.Style = PLOT_AREA_FILL_NONE; }
+            inline void SetChartAreaFillSolid( std::string fillColor )
+                                                                {
+                                                                  m_diagramm.chartAreaFill.Style = PLOT_AREA_FILL_SOLID;
+                                                                  m_diagramm.chartAreaFill.SolidColor = fillColor;
+                                                                }
+            // Angle - 0 ... 359.9 degree (clockwise)
+            // ScaleAngle - Specifies whether the angle scales with the fill region )
+            inline void SetChartAreaFillGradientLinear( double Angle, const GradientStops & Stops, bool ScaleAngle = true )
+                                                                {
+                                                                  assert( Stops.IsValid() );
+                                                                  m_diagramm.chartAreaFill.SetLinearGradient( Angle, ScaleAngle, Stops );
+                                                                }
+            inline void SetChartAreaFillGradientRadial( EGradientFillDirection Dir, const GradientStops & Stops )
+                                                                {
+                                                                  assert( Stops.IsValid() );
+                                                                  m_diagramm.chartAreaFill.SetRadialAndRectGradient( GradientFill::radial, Dir, Stops );
+                                                                }
+            inline void SetChartAreaFillGradientRectangular( EGradientFillDirection Dir, const GradientStops & Stops )
+                                                                {
+                                                                  assert( Stops.IsValid() );
+                                                                  m_diagramm.chartAreaFill.SetRadialAndRectGradient( GradientFill::rectangular, Dir, Stops );
+                                                                }
+            inline void SetChartAreaFillGradientPath( const GradientStops & Stops )
+                                                                {
+                                                                  assert( Stops.IsValid() );
+                                                                  m_diagramm.chartAreaFill.SetPathGradient( Stops );
+                                                                }
+            inline void SetChartAreaFillPattern( EPatternFillStyle PatternStyle, const std::string & FgColor, const std::string & BgColor )
+                                                                {
+                                                                  m_diagramm.chartAreaFill.SetPattern( PatternStyle, FgColor, BgColor );
+                                                                }
+
 
             inline void SetDiagrammNameSize( uint32_t size )    { m_diagramm.nameSize = size;   }
             inline void SetDiagrammName( const UniString & name ){ m_diagramm.name = name;       }
@@ -312,15 +555,17 @@ namespace SimpleXlsx
 
             bool Save();
 
-            void AddTitle( XMLWriter & xmlw, const UniString & name, uint32_t size, bool vertPos );
-            void AddTableData( XMLWriter & xmlw );
-            void AddLegend( XMLWriter & xmlw );
-            void AddXAxis( XMLWriter & xmlw, const Axis & x, uint32_t crossAxisId = 0 );
-            void AddYAxis( XMLWriter & xmlw, const Axis & y, uint32_t crossAxisId = 0 );
+            static void AddTitle( XMLWriter & xmlw, const UniString & name, uint32_t size, bool vertPos );
+            static void AddTableData( XMLWriter & xmlw , ETableData tableData );
+            static void AddLegend( XMLWriter & xmlw , EPosition legend_pos );
+            static void AddXAxis( XMLWriter & xmlw, const Axis & x, uint32_t crossAxisId = 0 );
+            static void AddYAxis( XMLWriter & xmlw, const Axis & y, uint32_t crossAxisId = 0 );
 
-            void AddLineChart( XMLWriter & xmlw, Axis & xAxis, uint32_t yAxisId, const std::vector<Series> & series, size_t firstSeriesId );
-            void AddBarChart( XMLWriter & xmlw, Axis & xAxis, uint32_t yAxisId, const std::vector<Series> & series, size_t firstSeriesId, EBarDirection barDir, EBarGrouping barGroup );
-            void AddScatterChart( XMLWriter & xmlw, uint32_t xAxisId, uint32_t yAxisId, const std::vector<Series> & series, size_t firstSeriesId, EScatterStyle style );
+            static void AddLineChart( XMLWriter & xmlw, Axis & xAxis, uint32_t yAxisId, const std::vector<Series> & series, size_t firstSeriesId );
+            static void AddBarChart( XMLWriter & xmlw, Axis & xAxis, uint32_t yAxisId, const std::vector<Series> & series, size_t firstSeriesId, EBarDirection barDir, EBarGrouping barGroup );
+            static void AddScatterChart( XMLWriter & xmlw, uint32_t xAxisId, uint32_t yAxisId, const std::vector<Series> & series, size_t firstSeriesId, EScatterStyle style );
+            static void AddMarker( XMLWriter & xmlw, const Series & ser , const char * markerID );
+            static void AddAreaFill( XMLWriter & xmlw, const AreaFill & areaFill );
 
             static std::string CellRangeString( const std::string & Title, const CellCoord & CellFrom, const CellCoord & szCellTo );
 

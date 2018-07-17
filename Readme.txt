@@ -1,4 +1,4 @@
-This library represents XLSX files writer for Microsoft Excel 2007 and above. 
+﻿This library represents XLSX files writer for Microsoft Excel 2007 and above. 
 
 The main feature of this library is that it uses C++ standard file streams. On the one hand it results in almost unnoticeable memory and CPU resources consumption while processing (that may be very useful at saving a large data arrays), but on the other hand it makes unfeasible to edit data that were written.
 Hence, if using this library the structure of the future report should be known enough.
@@ -15,7 +15,8 @@ Key features:
 - Charts with customizable parameters (on data sheet or separate sheet): linear, bar, scatter
 - Images on the worksheet: gif, jpg, jpeg, png, tif, tiff
 - Multiplatform: BSD, Linux, Windows
-- No external dependencies.
+- Unicode support
+- No external dependencies
 
 The SimpleXlsxWriter source code is available from:
 https://sourceforge.net/projects/simplexlsx/
@@ -23,28 +24,36 @@ https://sourceforge.net/projects/simplexlsx/
 This library is distributed under the terms of the zlib license:
 http://www.zlib.net/zlib_license.html
 
+2018-07-05 Version 0.29
+	Change log:
+		- Added CChart::SetEmptyCellsDisplayingMethod method for select how chart display empty cells (thanks for this work to Norbert Wołowiec).
+		- Added CChart::SetShowDataFromHiddenCells method for display data from hidden rows and columns (thanks for this work to Norbert Wołowiec).
+		- Added CChart::SetPlotAreaFill*** and CChart::SetChartAreaFill*** methods for filling in chart (thanks to Norbert Wołowiec).
+		- To CChart::Series was added fill style specified for a bar chart (thanks to Norbert Wołowiec).
+		- Fixed error with secondary axis in scatter chart (thanks to Knut Buttnase).
+
 2018-04-16 Version 0.28
 	Change log:
 		- Unicode support without using _UNICODE and _T() macros. The file "tchar.h" was deleted.
 		- The UniString helper class was added for simultaneous and transparent work with std::string and std::wstring.
 		- Added method Comment::AddContent.
 		- Updated examples.
-		- Fixed sprintf "%zu" specifier for correct work in Visual Studio 2010 (thanks to Sergey).
+		- Fixed sprintf specifier for correct work in Visual Studio 2010 (thanks to Sergey).
 
 2018-02-13 Version 0.27
 	Change log:
-		- Added CMakeLists.txt (thanks for this to Thomas Bechmann).
-		- The type of row height changed to double type (previously uint32_t) according to ISO/IEC 29500-1: 2016 section 18.3.1.73 (thanks for this to Thomas Bechmann).
-		- Added CWorksheet::AddCell method with an unsigned long as a parameter (thanks for this to Thomas Bechmann).
+		- Added CMakeLists.txt (thanks for this work to Thomas Bechmann).
+		- The type of row height changed to double type (previously uint32_t) according to ISO/IEC 29500-1: 2016 section 18.3.1.73 (thanks for this work to Thomas Bechmann).
+		- Added CWorksheet::AddCell method with an unsigned long as a parameter (thanks for this work to Thomas Bechmann).
 
 2018-02-08 Version 0.26
 	Change log:
-		- Fixed compilation in Visual Studio 2017 (thanks for this to jordi73).
+		- Fixed compilation in Visual Studio 2017 (thanks for this work to jordi73).
 		- Specified license type - zlib.
 
 2018-01-04 Version 0.25
 	Change log:
-		- Saving empty cells with format (borders, fill...) (thanks for this to E.Naumovich).
+		- Saving empty cells with format (borders, fill...) (thanks for this work to E.Naumovich).
 		- Adding images to a worksheet by CWorkbook::AddImage in two ways: with a binding on two cells (anchored) or scaling on axes X and Y (in percent). Supported image formats (via file extension): gif, jpg, jpeg, png, tif, tiff (thanks for idea to Henrique Aschenbrenner and E.Naumovich).
 		- Minor bug fixes.
 		- Updated examples.
@@ -55,7 +64,7 @@ http://www.zlib.net/zlib_license.html
 
 2017-05-09 Version 0.23
 	Change log:
-		- Improved scatter charts to more "scientific" appearance, including color and symbol selection and width of the lines (thanks for this to E.Naumovich).
+		- Improved scatter charts to more "scientific" appearance, including color and symbol selection and width of the lines (thanks for this work to E.Naumovich).
 		- Creating charts in the worksheets by CWorkbook::AddChart. For chart sheets must be used CWorkbook::AddChartSheet (thanks for idea to Aso).
 		- Now the sheets are arranged in order of creation. Using CWorkbook::SetActiveSheet can be set the active sheet (by default the first sheet).
 		- CWorkbook::m_styleList was moved to private. Now must be used CWorkbook::AddStyle() and CWorkbook::GetFonts().

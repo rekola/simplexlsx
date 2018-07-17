@@ -142,6 +142,7 @@ namespace SimpleXlsx
     // ****************************************************************************
     CChart & CWorkbook::AddChart( CWorksheet & sheet, DrawingPoint TopLeft, DrawingPoint BottomRight, EChartTypes type )
     {
+        assert( type != CHART_NONE );
         CChart * chart = new CChart( m_charts.size() + 1, type, * m_pathManager );
         m_charts.push_back( chart );
         sheet.m_Drawing.AppendChart( chart, TopLeft, BottomRight );

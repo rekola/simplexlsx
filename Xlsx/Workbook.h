@@ -107,10 +107,12 @@ namespace SimpleXlsx
             //Adds sheet with single chart
             inline CChartsheet & AddChartSheet( const std::string & title, EChartTypes type = CHART_LINEAR )
             {
+                assert( type != CHART_NONE );
                 return CreateChartSheet( NormalizeSheetName( title ), type );
             }
             inline CChartsheet & AddChartSheet( const std::wstring & title, EChartTypes type = CHART_LINEAR )
             {
+                assert( type != CHART_NONE );
                 return CreateChartSheet( NormalizeSheetName( title ), type );
             }
 

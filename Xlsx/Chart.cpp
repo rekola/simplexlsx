@@ -128,72 +128,67 @@ namespace SimpleXlsx
                     return false;*/
         }
 
-        switch( m_diagramm.typeAdditional )
-        {
-            case CHART_LINEAR   :
-            {
-                AddLineChart( xmlw, m_x2Axis, m_y2Axis.id, m_seriesSetAdd, m_seriesSet.size() );
-                break;
-            }
-            case CHART_BAR      :
-            {
-                AddBarChart( xmlw, m_x2Axis, m_y2Axis.id, m_seriesSetAdd, m_seriesSet.size(), m_diagramm.barDir, m_diagramm.barGroup );
-                break;
-            }
-            case CHART_SCATTER  :
-            {
-                m_xAxis.sourceLinked = true;
-                AddScatterChart( xmlw, m_xAxis.id, m_yAxis.id, m_seriesSet, m_seriesSet.size(), m_diagramm.scatterStyle );
-                break;
-            }
-            case CHART_NONE     : break;
-                /*default:
-                    break;*/
-        }
-
-        switch( m_diagramm.typeMain )
-        {
-            case CHART_LINEAR   :
-            case CHART_BAR      :
-                AddXAxis( xmlw, m_xAxis, m_yAxis.id );
-                AddYAxis( xmlw, m_yAxis, m_xAxis.id );
-                break;
-            case CHART_SCATTER  :
-                AddXAxis( xmlw, m_xAxis, m_yAxis.id ); /// Here was painfull error!!!! E.N.
-                AddYAxis( xmlw, m_yAxis, m_xAxis.id );
-                break;
-            case CHART_NONE     : return false;
-                /*default:
-                    return false;*/
-        }
-
         if( ! m_seriesSetAdd.empty() )
         {
             switch( m_diagramm.typeAdditional )
             {
                 case CHART_LINEAR   :
+                {
+                    AddLineChart( xmlw, m_x2Axis, m_y2Axis.id, m_seriesSetAdd, m_seriesSet.size() );
+                    break;
+                }
                 case CHART_BAR      :
-                    AddXAxis( xmlw, m_x2Axis, m_y2Axis.id );
-                    AddYAxis( xmlw, m_y2Axis, m_x2Axis.id );
+                {
+                    AddBarChart( xmlw, m_x2Axis, m_y2Axis.id, m_seriesSetAdd, m_seriesSet.size(), m_diagramm.barDir, m_diagramm.barGroup );
                     break;
+                }
                 case CHART_SCATTER  :
-                    AddXAxis( xmlw, m_x2Axis, m_y2Axis.id ); /// Here was painfull error!!!! E.N.
-                    AddYAxis( xmlw, m_y2Axis, m_x2Axis.id );
+                {
+                    m_xAxis.sourceLinked = true;
+                    AddScatterChart( xmlw, m_x2Axis.id, m_y2Axis.id, m_seriesSetAdd, m_seriesSet.size(), m_diagramm.scatterStyle );
                     break;
-                case CHART_NONE     : return false;
+                }
+                case CHART_NONE     : break;
                     /*default:
-                        return false;*/
+                        break;*/
             }
         }
 
-        AddTableData( xmlw );
+        // Main axes
+        AddXAxis( xmlw, m_xAxis, m_yAxis.id );
+        AddYAxis( xmlw, m_yAxis, m_xAxis.id );
+        // Additional axes
+        if( ! m_seriesSetAdd.empty() && ( m_diagramm.typeAdditional != CHART_NONE ) )
+        {
+            AddXAxis( xmlw, m_x2Axis, m_y2Axis.id );
+            AddYAxis( xmlw, m_y2Axis, m_x2Axis.id );
+        }
+
+        AddTableData( xmlw, m_diagramm.tableData );
+
+        AddAreaFill( xmlw, m_diagramm.plotAreaFill );
 
         xmlw.End( "c:plotArea" );
-        AddLegend( xmlw );
-        xmlw.TagL( "c:plotVisOnly" ).Attr( "val", 1 ).EndL();
-        xmlw.TagL( "c:dispBlanksAs" ).Attr( "val", "gap" ).EndL();
+        AddLegend( xmlw, m_diagramm.legend_pos );
+        xmlw.TagL( "c:plotVisOnly" ).Attr( "val", m_diagramm.showDataFromHiddenCells ? 0 : 1 ).EndL();
+        switch( m_diagramm.emptyCellsDisplayMethod )
+        {
+            case EMPTY_CELLS_DISP_GAPS:
+                xmlw.TagL( "c:dispBlanksAs" ).Attr( "val", "gap" ).EndL();
+                break;
+            case EMPTY_CELLS_DISP_ZERO:
+                xmlw.TagL( "c:dispBlanksAs" ).Attr( "val", "zero" ).EndL();
+                break;
+            case EMPTY_CELLS_DISP_CONNECT:
+                xmlw.TagL( "c:dispBlanksAs" ).Attr( "val", "span" ).EndL();
+                break;
+            default:
+                break;
+        }
         xmlw.TagL( "c:showDLblsOverMax" ).Attr( "val", 0 ).EndL();
-        xmlw.End( "c:chart" ).End( "c:chartSpace" );
+        xmlw.End( "c:chart" );
+        AddAreaFill( xmlw, m_diagramm.chartAreaFill );
+        xmlw.End( "c:chartSpace" );
 
         // /xl/charts/chartX.xml -]
         return true;
@@ -273,11 +268,11 @@ namespace SimpleXlsx
     /// @brief  Adds table data into chart if it is necessary
     /// @return no
     // ****************************************************************************
-    void CChart::AddTableData( XMLWriter & xmlw )
+    void CChart::AddTableData( XMLWriter & xmlw, ETableData tableData )
     {
         bool showKeys = false;
 
-        switch( m_diagramm.tableData )
+        switch( tableData )
         {
             case TBL_DATA_NONE      :   return;
             case TBL_DATA           :   break;
@@ -296,11 +291,11 @@ namespace SimpleXlsx
     /// @brief  Adds legend into chart if it is necessary
     /// @return no
     // ****************************************************************************
-    void CChart::AddLegend( XMLWriter & xmlw )
+    void CChart::AddLegend( XMLWriter & xmlw, EPosition legend_pos )
     {
         int overlay = 1;
         char pos = '\0';
-        switch( m_diagramm.legend_pos )
+        switch( legend_pos )
         {
             case POS_NONE:  return;
 
@@ -463,16 +458,7 @@ namespace SimpleXlsx
                     break;
                 default:;
             }
-            xmlw.Tag( "c:marker" ).TagL( "c:symbol" ).Attr( "val", markerID ).EndL().TagL( "c:size" ).Attr( "val", it->Marker.Size ).EndL();
-            if( it->Marker.FillColor.size() == 6 && it->Marker.LineColor.size() == 6 ) // check formal RGB record format
-            {
-                xmlw.Tag( "c:spPr" );
-                xmlw.Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", it->Marker.FillColor ).EndL().End( "a:solidFill" ); // marker fill
-                xmlw.Tag( "a:ln" ).Attr( "w", floor( it->Marker.LineWidth * 12700 ) ).Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", it->Marker.LineColor ).EndL().End( "a:solidFill" ).End( "a:ln" ); // marker line
-                xmlw.End( "c:spPr" );
-            };
-            xmlw.End( "c:marker" );
-
+            AddMarker( xmlw, * it, markerID );
 
             if( ! it->title.empty() )
             {
@@ -564,6 +550,8 @@ namespace SimpleXlsx
         else if( barGroup == BAR_GROUP_STACKED ) xmlw.TagL( "c:grouping" ).Attr( "val", "stacked" ).EndL();
         else if( barGroup == BAR_GROUP_PERCENT_STACKED ) xmlw.TagL( "c:grouping" ).Attr( "val", "percentStacked" ).EndL();
 
+        xmlw.TagL( "c:varyColors" ).Attr( "val", 1 ).EndL();
+
         for( std::vector<Series>::const_iterator it = series.begin(); it != series.end(); it++ )
         {
             xmlw.Tag( "c:ser" );
@@ -575,14 +563,48 @@ namespace SimpleXlsx
             {
                 xAxis.sourceLinked = true;
                 std::string cfRange = CellRangeString( it->catSheet->GetTitle(),
-                                                    CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
-                                                    CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );
+                                                       CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
+                                                       CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );
                 xmlw.Tag( "c:cat" ).Tag( "c:numRef" ).TagOnlyContent( "c:f", cfRange ).End( "c:numRef" ).End( "c:cat" );
             }
+
+            switch( it->barFillStyle )
+            {
+                case Series::BAR_FILL_NONE:
+                    xmlw.Tag( "c:spPr" ).Tag( "a:noFill" ).End( "a:noFill" ).End( "c:spPr" );
+                    break;
+                case Series::BAR_FILL_SOLID:
+                    xmlw.Tag( "c:spPr" ).Tag( "a:solidFill" ).Tag( "a:srgbClr" ).Attr( "val", it->LineColor );
+                    xmlw.End( "a:srgbClr" ).End( "a:solidFill" ).End( "c:spPr" );
+                    break;
+                case Series::BAR_FILL_AUTOMATIC:
+                    break;
+            }
+            xmlw.TagL( "c:invertIfNegative" ).Attr( "val", it->barInvertIfNegative ? 1 : 0 ).EndL();
+
             std::string cfRange = CellRangeString( it->valSheet->GetTitle(),
-                                                CellCoord( it->valAxisFrom.row, it->valAxisFrom.col ),
-                                                CellCoord( it->valAxisTo.row, it->valAxisTo.col ) );
+                                                   CellCoord( it->valAxisFrom.row, it->valAxisFrom.col ),
+                                                   CellCoord( it->valAxisTo.row, it->valAxisTo.col ) );
             xmlw.Tag( "c:val" ).Tag( "c:numRef" ).TagOnlyContent( "c:f", cfRange ).End( "c:numRef" ).End( "c:val" );
+
+            if( it->barInvertIfNegative )
+            {
+                switch( it->barFillStyle )
+                {
+                    case Series::BAR_FILL_NONE:
+                        break;
+                    case Series::BAR_FILL_SOLID:
+                        xmlw.Tag( "c:extLst" ).Tag( "c:ext" ).Attr( "uri", "{6F2FDCE9-48DA-4B69-8628-5D25D57E5C99}" ).Attr( "xmlns:c14", ns_c14 );
+                        xmlw.Tag( "c14:invertSolidFillFmt" ).Tag( "c14:spPr" ).Attr( "xmlns:c14", ns_c14 );
+                        xmlw.Tag( "a:solidFill" ).Tag( "a:srgbClr" ).Attr( "val", it->barInvertedColor ).End( "a:srgbClr" ).End( "a:solidFill" );
+                        xmlw.End( "c14:spPr" ).End( "c14:invertSolidFillFmt" );
+                        xmlw.End( "c:ext" ).End( "c:extLst" );
+                        break;
+                    case Series::BAR_FILL_AUTOMATIC:
+                        break;
+                }
+            }
+
             xmlw.TagL( "c:smooth" ).Attr( "val", it->JoinType == Series::joinSmooth ? 1 : 0 ).EndL();
 
             xmlw.End( "c:ser" );
@@ -613,7 +635,7 @@ namespace SimpleXlsx
 
         if( style == SCATTER_FILL ) xmlw.TagL( "c:scatterStyle" ).Attr( "val", "smoothMarker" ).EndL();
         else if( style == SCATTER_POINT ) xmlw.TagL( "c:scatterStyle" ).Attr( "val", "lineMarker" ).EndL();
-        xmlw.TagL( "c:varyColors" ).Attr( "val", "0" ).EndL();
+        xmlw.TagL( "c:varyColors" ).Attr( "val", 0 ).EndL();
         for( std::vector<Series>::const_iterator it = series.begin(); it != series.end(); it++ )
         {
             xmlw.Tag( "c:ser" );
@@ -637,15 +659,7 @@ namespace SimpleXlsx
                         break;
                     default:;
                 }
-            xmlw.Tag( "c:marker" ).TagL( "c:symbol" ).Attr( "val", markerID ).EndL().TagL( "c:size" ).Attr( "val", it->Marker.Size ).EndL();
-            if( it->Marker.FillColor.size() == 6 && it->Marker.LineColor.size() == 6 ) // check formal RGB record format
-            {
-                xmlw.Tag( "c:spPr" );
-                xmlw.Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", it->Marker.FillColor ).EndL().End( "a:solidFill" ); // marker fill
-                xmlw.Tag( "a:ln" ).Attr( "w", floor( it->Marker.LineWidth * 12700 ) ).Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", it->Marker.LineColor ).EndL().End( "a:solidFill" ).End( "a:ln" ); // marker line
-                xmlw.End( "c:spPr" );
-            };
-            xmlw.End( "c:marker" );
+            AddMarker( xmlw, * it, markerID );
 
             if( ! it->title.empty() )
                 xmlw.Tag( "c:tx" ).TagOnlyContent( "c:v", it->title ).End( "c:tx" );
@@ -680,8 +694,8 @@ namespace SimpleXlsx
 
             }
             std::string cfRange = CellRangeString( it->catSheet->GetTitle(),
-                                                CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
-                                                CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );
+                                                   CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
+                                                   CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );
             xmlw.Tag( "c:xVal" ).Tag( "c:numRef" ).TagOnlyContent( "c:f", cfRange ).End( "c:numRef" ).End( "c:xVal" );
 
             cfRange = CellRangeString( it->valSheet->GetTitle(),
@@ -700,6 +714,169 @@ namespace SimpleXlsx
         xmlw.TagL( "c:axId" ).Attr( "val", yAxisId ).EndL();
 
         xmlw.End( "c:scatterChart" );
+    }
+
+    void CChart::AddMarker( XMLWriter & xmlw, const CChart::Series & ser, const char * markerID )
+    {
+        xmlw.Tag( "c:marker" ).TagL( "c:symbol" ).Attr( "val", markerID ).EndL().TagL( "c:size" ).Attr( "val", ser.Marker.Size ).EndL();
+        const bool IsFillColor = ser.Marker.FillColor.size() == 6;
+        const bool IsLineColor = ser.Marker.LineColor.size() == 6;
+        if( IsFillColor || IsLineColor ) // check formal RGB record format
+        {
+            xmlw.Tag( "c:spPr" );
+            if( IsFillColor )
+                xmlw.Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", ser.Marker.FillColor ).EndL().End( "a:solidFill" ); // marker fill
+            if( IsLineColor )
+                xmlw.Tag( "a:ln" ).Attr( "w", floor( ser.Marker.LineWidth * 12700 ) ).Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", ser.Marker.LineColor ).EndL().End( "a:solidFill" ).End( "a:ln" ); // marker line
+            xmlw.End( "c:spPr" );
+        }
+        xmlw.End( "c:marker" );
+    }
+
+    static inline void AddFillPath( XMLWriter & xmlw, const char * PathName, CChart::EGradientFillDirection Dir )
+    {
+        const char * FTag = "a:fillToRect", * TTag = "a:tileRect", * PTag = "a:path";
+        xmlw.Tag( "a:path" ).Attr( "path", PathName );
+        switch( Dir )
+        {
+            case CChart::FROM_BOTTOM_RIGHT_CORNER:
+            {
+                xmlw.TagL( FTag ).Attr( "l", 100000 ).Attr( "t", 100000 ).EndL().End( PTag );
+                xmlw.TagL( TTag ).Attr( "r", -100000 ).Attr( "b", -100000 ).EndL(); break;
+                break;
+            }
+            case CChart::FROM_BOTTOM_LEFT_CORNER:
+            {
+                xmlw.TagL( FTag ).Attr( "t", 100000 ).Attr( "r", 100000 ).EndL().End( PTag );
+                xmlw.TagL( TTag ).Attr( "l", -100000 ).Attr( "b", -100000 ).EndL(); break;
+                break;
+            }
+            case CChart::FROM_CENTER:
+            {
+                xmlw.TagL( FTag ).Attr( "l", 50000 ).Attr( "t", 50000 ).Attr( "r", 50000 ).Attr( "b", 50000 ).EndL().End( PTag );
+                xmlw.TagL( TTag ).EndL(); break;
+                break;
+            }
+            case CChart::FROM_TOP_RIGHT_CORNER:
+            {
+                xmlw.TagL( FTag ).Attr( "l", 100000 ).Attr( "b", 100000 ).EndL().End( PTag );
+                xmlw.TagL( TTag ).Attr( "t", -100000 ).Attr( "r", -100000 ).EndL(); break;
+                break;
+            }
+            case CChart::FROM_TOP_LEFT_CORNER:
+            {
+                xmlw.TagL( FTag ).Attr( "r", 100000 ).Attr( "b", 100000 ).EndL().End( PTag );
+                xmlw.TagL( TTag ).Attr( "l", -100000 ).Attr( "t", -100000 ).EndL(); break;
+                break;
+            }
+        }
+    }
+
+    static inline const char * PatternPresetCode( CChart::EPatternFillStyle Style )
+    {
+        switch( Style )
+        {
+            case CChart::PERCENT_5  :   return "pct5";
+            case CChart::PERCENT_10 :   return "pct10";
+            case CChart::PERCENT_20 :   return "pct20";
+            case CChart::PERCENT_25 :   return "pct25";
+            case CChart::PERCENT_30 :   return "pct30";
+            case CChart::PERCENT_40 :   return "pct40";
+            case CChart::PERCENT_50 :   return "pct50";
+            case CChart::PERCENT_60 :   return "pct60";
+            case CChart::PERCENT_70 :   return "pct70";
+            case CChart::PERCENT_75 :   return "pct75";
+            case CChart::PERCENT_80 :   return "pct80";
+            case CChart::PERCENT_90 :   return "pct90";
+
+            case CChart::LIGHT_DOWNWARD_DIAGONAL:   return "ltDnDiag";
+            case CChart::DARK_DOWNWARD_DIAGONAL :   return "dkDnDiag";
+            case CChart::WIDE_DOWNWARD_DIAGONAL :   return "wdDnDiag";
+            case CChart::LIGHT_UPWARD_DIAGONAL  :   return "ltUpDiag";
+            case CChart::DARK_UPWARD_DIAGONAL   :   return "dkUpDiag";
+            case CChart::WIDE_UPWARD_DIAGONAL   :   return "wdUpDiag ";
+
+            case CChart::LIGHT_VERTICAL     :   return "ltVert";
+            case CChart::NARROW_VERTICAL    :   return "narVert";
+            case CChart::DARK_VERTICAL      :   return "dkVert";
+            case CChart::LIGHT_HORIZONTAL   :   return "ltHorz";
+            case CChart::NARROW_HORIZONTAL  :   return "narHorz";
+            case CChart::DARK_HORIZONTAL    :   return "dkHorz";
+
+            case CChart::DASHED_DOWNWARD_DIAGONAL   :   return "dashDnDiag";
+            case CChart::DASHED_UPWARD_DIAGONAL     :   return "dashUpDiag";
+            case CChart::DASHED_HORIZONTAL          :   return "dashHorz";
+            case CChart::DASHED_VERTICAL            :   return "dashVert";
+            case CChart::SMALL_CONFETTI             :   return "smConfetti";
+            case CChart::LARGE_CONFETTI             :   return "lgConfetti";
+
+            case CChart::ZIG_ZAG            :   return "zigZag";
+            case CChart::WAVE               :   return "wave";
+            case CChart::DIAGONAL_BRICK     :   return "diagBrick";
+            case CChart::HORIZONTAL_BRICK   :   return "horzBrick";
+            case CChart::WEAVE              :   return "weave";
+            case CChart::PLAID              :   return "plaid";
+
+            case CChart::DIVOT          :   return "divot";
+            case CChart::DOTTED_GRID    :   return "dotGrid";
+            case CChart::DOTTED_DIAMOND :   return "dotDmnd";
+            case CChart::SHINGLE        :   return "shingle";
+            case CChart::TRELLIS        :   return "trellis";
+            case CChart::SPHERE         :   return "sphere";
+
+            case CChart::SMALL_GRID         :   return "smGrid";
+            case CChart::LARGE_GRID         :   return "lgGrid";
+            case CChart::SMALL_CHECKER_BOARD:   return "smCheck";
+            case CChart::LARGE_CHECKER_BOARD:   return "lgCheck";
+            case CChart::OUTLINED_DIAMOND   :   return "openDmnd";
+            case CChart::SOLID_DIAMOND      :   return "solidDmnd";
+        }
+        return "";
+    }
+
+    void CChart::AddAreaFill( XMLWriter & xmlw, const CChart::AreaFill & areaFill )
+    {
+        switch( areaFill.Style )
+        {
+            case PLOT_AREA_FILL_NONE    : break;
+            case PLOT_AREA_FILL_SOLID   :
+            {
+                if( areaFill.SolidColor.size() == 6 )
+                    xmlw.Tag( "c:spPr" ).Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", areaFill.SolidColor ).EndL().End( "a:solidFill" ).End( "c:spPr" );
+                break;
+            }
+            case PLOT_AREA_FILL_GRADIENT:
+            {
+                xmlw.Tag( "c:spPr" ).Tag( "a:gradFill" ).Attr( "flip", "none" ).Attr( "rotWithShape", 1 ).Tag( "a:gsLst" );
+                const GradientFill & GF = areaFill.Gradient;
+                GradientStops::const_iterator it = GF.ColorPoints.begin();
+                for( ; it != GF.ColorPoints.end(); it++ )
+                    xmlw.Tag( "a:gs" ).Attr( "pos", it->first * 1000 ).Tag( "a:srgbClr" ).Attr( "val", it->second ).End( "a:srgbClr" ).End( "a:gs" );
+                xmlw.End( "a:gsLst" );
+                switch( GF.FillType )
+                {
+                    case GradientFill::linear:
+                    {
+                        if( GF.LinearAngle != 0 )
+                            xmlw.Tag( "a:lin" ).Attr( "ang", int( GF.LinearAngle * 60000 ) ).Attr( "scaled", GF.LinearScaleAngle ? 1 : 0 ).End( "a:lin" );
+                        break;
+                    }
+                    case GradientFill::radial       :  AddFillPath( xmlw, "circle", GF.FillDirection ); break;
+                    case GradientFill::rectangular  :  AddFillPath( xmlw, "rect", GF.FillDirection ); break;
+                    case GradientFill::path         :  AddFillPath( xmlw, "shape", CChart::FROM_CENTER ); break;
+                }
+                xmlw.End( "a:gradFill" ).End( "c:spPr" );
+                break;
+            }
+            case PLOT_AREA_FILL_PATTERN:
+            {
+                xmlw.Tag( "c:spPr" ).Tag( "a:pattFill" ).Attr( "prst", PatternPresetCode( areaFill.Pattern ) );
+                xmlw.Tag( "a:fgClr" ).TagL( "a:srgbClr" ).Attr( "val", areaFill.PatternFgColor ).EndL().End( "a:fgClr" );
+                xmlw.Tag( "a:bgClr" ).TagL( "a:srgbClr" ).Attr( "val", areaFill.PatternBgColor ).EndL().End( "a:bgClr" );
+                xmlw.End( "a:pattFill" ).End( "c:spPr" );
+                break;
+            }
+        }
     }
 
     std::string CChart::CellRangeString( const std::string & Title, const CellCoord & CellFrom, const CellCoord & szCellTo )
