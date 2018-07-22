@@ -24,6 +24,10 @@ https://sourceforge.net/projects/simplexlsx/
 This library is distributed under the terms of the zlib license:
 http://www.zlib.net/zlib_license.html
 
+2018-07-21
+	Change log:
+		- Fixed bug with the number format in the cells (thanks to bcianyo).
+
 2018-07-05 Version 0.29
 	Change log:
 		- Added CChart::SetEmptyCellsDisplayingMethod method for select how chart display empty cells (thanks for this work to Norbert Wołowiec).

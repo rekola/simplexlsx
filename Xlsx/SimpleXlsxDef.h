@@ -34,7 +34,7 @@
 
 #include "../UTF8Encoder.hpp"
 
-#define SIMPLE_XLSX_VERSION	"0.29"
+#define SIMPLE_XLSX_VERSION	"0.30"
 
 namespace SimpleXlsx
 {
@@ -813,7 +813,7 @@ namespace SimpleXlsx
                     if( nums[i] == style.numFormat )
                     {
                         addItem = false;
-                        styleLinks[STYLE_LINK_NUM_FORMAT] = i;
+                        styleLinks[STYLE_LINK_NUM_FORMAT] = nums[ i ].id;
                         break;
                     }
                 }
