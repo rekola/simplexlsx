@@ -28,13 +28,13 @@
 #include <vector>
 
 #include "SimpleXlsxDef.h"
-#include "../XMLWriter.hpp"
 
 namespace SimpleXlsx
 {
     class CDrawing;
 
     class PathManager;
+    class XMLWriter;
 
     // ****************************************************************************
     /// @brief	The class CWorksheet is used for creation and population
@@ -104,33 +104,33 @@ namespace SimpleXlsx
             inline void AddCell()                                       { m_current_column++; }
             inline void AddEmptyCells( uint32_t Count )                 { m_current_column += Count; }
 
-            void AddCell( const CellDataStr & data )                    { AddCell( data.value, data.style_id );        }
             void AddCell( const std::string & value, size_t style_id = 0 );
-            void AddCell( const char * value, size_t style_id = 0 )     { AddCell( std::string( value ), style_id );   }
-            void AddCell( const std::wstring & value, size_t style_id = 0 ){ AddCell( UTF8Encoder::From_wstring( value ), style_id ); }
-            void AddCells( const std::vector<CellDataStr> & data );
+            inline void AddCell( const CellDataStr & data )                 { AddCell( data.value, data.style_id ); }
+            void AddCell( const char * value, size_t style_id = 0 )         { AddCell( std::string( value ), style_id ); }
+            void AddCell( const std::wstring & value, size_t style_id = 0 ) { AddCell( UTF8Encoder::From_wstring( value ), style_id ); }
+            inline void AddCells( const std::vector<CellDataStr> & data );
 
-            void AddCell( const CellDataTime & data )                   { AddCell( data.value, data.style_id );        }
             void AddCell( time_t value, size_t style_id );
-            void AddCells( const std::vector<CellDataTime> & data );
+            inline void AddCell( const CellDataTime & data )                { AddCell( data.value, data.style_id ); }
+            inline void AddCells( const std::vector<CellDataTime> & data );
 
-            void AddCell( const CellDataInt & data )                    { AddCellRoutine( data.value, data.style_id ); }
-            void AddCell( int32_t value, size_t style_id = 0 )          { AddCellRoutine( value, style_id );           }
-            void AddCells( const std::vector<CellDataInt> & data )      { AddCellsTempl( data ); }
+            void AddCell( int32_t value, size_t style_id = 0 );
+            inline void AddCell( const CellDataInt & data )                 { AddCell( data.value, data.style_id ); }
+            inline void AddCells( const std::vector<CellDataInt> & data )   { AddCellsTempl( data ); }
 
-            void AddCell( const CellDataUInt & data )                   { AddCellRoutine( data.value, data.style_id ); }
-            void AddCell( uint32_t value, size_t style_id = 0 )         { AddCellRoutine( value, style_id );           }
-            void AddCells( const std::vector<CellDataUInt> & data )     { AddCellsTempl( data ); }
+            void AddCell( uint32_t value, size_t style_id = 0 );
+            inline void AddCell( const CellDataUInt & data )                { AddCell( data.value, data.style_id ); }
+            inline void AddCells( const std::vector<CellDataUInt> & data )  { AddCellsTempl( data ); }
 
-            void AddCell( uint64_t value, size_t style_id = 0 )         { AddCellRoutine( value, style_id );           }
+            void AddCell( uint64_t value, size_t style_id = 0 );
 
-            void AddCell( const CellDataDbl & data )                    { AddCellRoutine( data.value, data.style_id ); }
-            void AddCell( double value, size_t style_id = 0 )           { AddCellRoutine( value, style_id );           }
-            void AddCells( const std::vector<CellDataDbl> & data )      { AddCellsTempl( data ); }
+            void AddCell( double value, size_t style_id = 0 );
+            inline void AddCell( const CellDataDbl & data )                 { AddCell( data.value, data.style_id ); }
+            inline void AddCells( const std::vector<CellDataDbl> & data )   { AddCellsTempl( data ); }
 
-            void AddCell( const CellDataFlt & data )                    { AddCellRoutine( data.value, data.style_id ); }
-            void AddCell( float value, size_t style_id = 0 )            { AddCellRoutine( value, style_id );           }
-            void AddCells( const std::vector<CellDataFlt> & data )      { AddCellsTempl( data ); }
+            void AddCell( float value, size_t style_id = 0 );
+            inline void AddCell( const CellDataFlt & data )                 { AddCell( data.value, data.style_id ); }
+            inline void AddCells( const std::vector<CellDataFlt> & data )   { AddCellsTempl( data ); }
             void EndRow();
 
             void AddRow( const std::vector<CellDataStr> & data, uint32_t offset = 0, double height = 0.0 )  { AddRowTempl( data, offset, height ); }
@@ -163,7 +163,7 @@ namespace SimpleXlsx
 
         private:
             //Disable copy and assignment
-            CWorksheet( const CWorksheet & that );
+            CWorksheet( const CWorksheet & );
             CWorksheet & operator=( const CWorksheet & );
 
             bool Save();
@@ -177,41 +177,31 @@ namespace SimpleXlsx
             void AddFrozenPane( uint32_t width, uint32_t height );
 
             template<typename T>
-            void AddCellRoutine( T data, size_t style );
-
-            template<typename T>
             void AddCellsTempl( const std::vector<T> & data );
+
+            void AddRowHeader( std::size_t Size, double Height );
+            void AddRowFooter() const;
 
             template<typename T>
             void AddRowTempl( const std::vector<T> & data, uint32_t offset, double height );
 
             bool SaveSheetRels();
 
+            inline std::string GetCellCoordStrAndIncColumn()
+            {
+                std::string Result = CellCoord( m_row_index, m_offset_column + m_current_column ).ToString();
+                m_current_column++;
+                return Result;
+            }
+
             friend class CWorkbook;
     };
 
-    // ****************************************************************************
-    /// @brief  Appends another a group of cells into a row
-    /// @param  data template data value
-    /// @param	style style index
-    /// @return no
-    // ****************************************************************************
     template<typename T>
-    void CWorksheet::AddCellRoutine( T data, size_t style )
-    {
-        m_XMLWriter->Tag( "c" ).Attr( "r", CellCoord( m_row_index, m_offset_column + m_current_column ).ToString() );
-        if( style != 0 )    // default style is not necessary to sign explicitly
-            m_XMLWriter->Attr( "s", style );
-        m_XMLWriter->TagOnlyContent( "v", data ).End( "c" );
-
-        m_current_column++;
-    }
-
-    template<typename T>
-    void CWorksheet::AddCellsTempl( const std::vector<T> & data )
+    inline void CWorksheet::AddCellsTempl( const std::vector<T> & data )
     {
         for( typename std::vector<T>::const_iterator it = data.begin(); it != data.end(); it++ )
-            AddCellRoutine( it->value, it->style_id );
+            AddCell( it->value, it->style_id );
     }
 
     // ****************************************************************************
@@ -225,32 +215,12 @@ namespace SimpleXlsx
     void CWorksheet::AddRowTempl( const std::vector<T> & data, uint32_t offset, double height )
     {
         m_offset_column = offset;
-        std::stringstream Spans;
-        Spans << m_offset_column + 1 << ':' << data.size() + m_offset_column + 1;
-        m_XMLWriter->Tag( "row" ).Attr( "r", ++m_row_index ).Attr( "spans", Spans.str() ).Attr( "x14ac:dyDescent", 0.25 );
-        if( height > 0 ) m_XMLWriter->Attr( "ht", height ).Attr( "customHeight", 1 );
+        AddRowHeader( data.size(), height );
         m_current_column = 0;
         AddCells( data );
-        m_XMLWriter->End( "row" );
+        AddRowFooter();
 
         m_offset_column = 0;
-    }
-
-    // ****************************************************************************
-    /// @brief	Generates a header for another row
-    /// @param	height row height (default if 0)
-    /// @return	no
-    // ****************************************************************************
-    inline void CWorksheet::BeginRow(double height )
-    {
-        if( m_row_opened ) m_XMLWriter->End( "row" );
-        m_XMLWriter->Tag( "row" ).Attr( "r", ++m_row_index ).Attr( "x14ac:dyDescent", 0.25 );
-
-        if( height > 0 ) m_XMLWriter->Attr( "ht", height ).Attr( "customHeight", 1 );
-
-        m_current_column = 0;
-        m_row_opened = true;
-
     }
 
     // ****************************************************************************
@@ -274,18 +244,6 @@ namespace SimpleXlsx
         for( size_t i = 0; i < data.size(); i++ )
             AddCell( data[i] );
     }
-
-    // ****************************************************************************
-    /// @brief	Closes previously began row
-    /// @return	no
-    // ****************************************************************************
-    inline void CWorksheet::EndRow()
-    {
-        if( ! m_row_opened ) return;
-        m_XMLWriter->End( "row" );
-        m_row_opened = false;
-    }
-
 } // namespace SimpleXlsx
 
 #endif	// XLSX_WORKSHEET_H

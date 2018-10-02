@@ -28,9 +28,26 @@
 #include "Drawing.h"
 
 #include "../PathManager.hpp"
+#include "../XMLWriter.hpp"
 
 namespace SimpleXlsx
 {
+    // ****************************************************************************
+    /// @brief  Appends another a group of cells into a row
+    /// @param  data template data value
+    /// @param	style style index
+    /// @return no
+    // ****************************************************************************
+    template<typename T>
+    static void AddCellRoutine_zzz( T data, size_t style, const std::string & CellCoord, XMLWriter & xmlw )
+    {
+        xmlw.Tag( "c" ).Attr( "r", CellCoord );
+        if( style != 0 )    // default style is not necessary to sign explicitly
+            xmlw.Attr( "s", style );
+        xmlw.TagOnlyContent( "v", data ).End( "c" );
+    }
+
+
     // ****************************************************************************
     /// @brief      The class constructor
     /// @param      index index of a sheet to be created (for example, sheet1.xml)
@@ -148,6 +165,23 @@ namespace SimpleXlsx
     }
 
     // ****************************************************************************
+    /// @brief	Generates a header for another row
+    /// @param	height row height (default if 0)
+    /// @return	no
+    // ****************************************************************************
+    void CWorksheet::BeginRow( double height )
+    {
+        if( m_row_opened ) m_XMLWriter->End( "row" );
+        m_XMLWriter->Tag( "row" ).Attr( "r", ++m_row_index ).Attr( "x14ac:dyDescent", 0.25 );
+
+        if( height > 0 ) m_XMLWriter->Attr( "ht", height ).Attr( "customHeight", 1 );
+
+        m_current_column = 0;
+        m_row_opened = true;
+
+    }
+
+    // ****************************************************************************
     /// @brief	Add string-formatted cell with specified style
     /// @param	data reference to data
     /// @return	no
@@ -221,9 +255,47 @@ namespace SimpleXlsx
         double CalcedValue = excelOneSecond * ( secondsFrom1900to1970 + timeSinceEpoch ) + 2;
 
         std::streamsize OldPrecision = m_XMLWriter->SetFloatPrecision( std::numeric_limits<double>::digits10 );
-        AddCellRoutine( CalcedValue, style_id );
+        //AddCellRoutine( CalcedValue, style_id );
+        AddCellRoutine_zzz( CalcedValue, style_id, GetCellCoordStrAndIncColumn(), * m_XMLWriter );
         m_XMLWriter->SetFloatPrecision( OldPrecision );
     }
+
+    void CWorksheet::AddCell( int32_t value, size_t style_id )
+    {
+        AddCellRoutine_zzz( value, style_id, GetCellCoordStrAndIncColumn(), * m_XMLWriter );
+    }
+
+    void CWorksheet::AddCell( uint32_t value, size_t style_id )
+    {
+        AddCellRoutine_zzz( value, style_id, GetCellCoordStrAndIncColumn(), * m_XMLWriter );
+    }
+
+    void CWorksheet::AddCell( uint64_t value, size_t style_id )
+    {
+        AddCellRoutine_zzz( value, style_id, GetCellCoordStrAndIncColumn(), * m_XMLWriter );
+    }
+
+    void CWorksheet::AddCell( double value, size_t style_id )
+    {
+        AddCellRoutine_zzz( value, style_id, GetCellCoordStrAndIncColumn(), * m_XMLWriter );
+    }
+
+    void CWorksheet::AddCell( float value, size_t style_id )
+    {
+        AddCellRoutine_zzz( value, style_id, GetCellCoordStrAndIncColumn(), * m_XMLWriter );
+    }
+
+    // ****************************************************************************
+    /// @brief	Closes previously began row
+    /// @return	no
+    // ****************************************************************************
+    void CWorksheet::EndRow()
+    {
+        if( ! m_row_opened ) return;
+        m_XMLWriter->End( "row" );
+        m_row_opened = false;
+    }
+
 
     // ****************************************************************************
     /// @brief  Internal initializatino method adds frozen pane`s information into sheet
@@ -261,6 +333,20 @@ namespace SimpleXlsx
         }
         else if( height > 0 )
             m_XMLWriter->TagL( "selection" ).Attr( "pane", "bottomLeft" ).Attr( "activeCell", szCoord ).Attr( "sqref", szCoord ).EndL();
+    }
+
+    void CWorksheet::AddRowHeader( std::size_t Size, double Height )
+    {
+        std::stringstream Spans;
+        Spans << m_offset_column + 1 << ':' << Size + m_offset_column + 1;
+        m_XMLWriter->Tag( "row" ).Attr( "r", ++m_row_index ).Attr( "spans", Spans.str() ).Attr( "x14ac:dyDescent", 0.25 );
+        if( Height > 0 )
+            m_XMLWriter->Attr( "ht", Height ).Attr( "customHeight", 1 );
+    }
+
+    void CWorksheet::AddRowFooter() const
+    {
+        m_XMLWriter->End( "row" );
     }
 
     // ****************************************************************************

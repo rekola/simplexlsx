@@ -24,7 +24,11 @@ https://sourceforge.net/projects/simplexlsx/
 This library is distributed under the terms of the zlib license:
 http://www.zlib.net/zlib_license.html
 
-2018-07-21
+2018-10-02 Version 0.31
+	Change log:
+		- Refactoring code for possibility to make mixed debug/release compilation of the library and of the main program (thanks to E.Naumovich).
+
+2018-07-21 Version 0.30
 	Change log:
 		- Fixed bug with the number format in the cells (thanks to bcianyo).
 
