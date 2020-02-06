@@ -61,8 +61,8 @@ class CWorkbook
 
         struct DefinedName
         {
-            const CSheet  * CSheet, * ScopeSheet;
-            std::string     Comment, PostFix;
+            const SimpleXlsx::CSheet    * CSheet, * ScopeSheet;
+            std::string                 Comment, PostFix;
 
             inline DefinedName( double AConstant, const UniString & AComment, const SimpleXlsx::CSheet * AScopeSheet ) :
                 CSheet( NULL ), ScopeSheet( AScopeSheet ), Comment( AComment )
