@@ -24,6 +24,9 @@ https://sourceforge.net/projects/simplexlsx/
 This library is distributed under the terms of the zlib license:
 http://www.zlib.net/zlib_license.html
 
+2020-03-29 Version 0.35
+		- Fixed undefined behavior with cells ranges for chart serieses (appeared in version r0.34) (thanks to Sergio C and Logan Courtney).
+
 2020-02-05 Version 0.34
 		- The CellDataTime class has been redesigned to be able to set the date and time in various ways (thanks to E.Naumovich).
                 - Added defined names (thanks to E.Naumovich).

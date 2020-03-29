@@ -953,7 +953,8 @@ std::string CChart::CellRangeString( const std::string & Title, const CellCoord 
 {
     CellCoord::TConvBuf Buffer;
     std::stringstream RangeStream;
-    RangeStream << '\'' << Title << "\'!$" << CellFrom.ToString( Buffer ) << ":$" << szCellTo.ToString( Buffer );
+    RangeStream << '\'' << Title << "\'!$" << CellFrom.ToString( Buffer );  // Don't join these
+    RangeStream << ":$" << szCellTo.ToString( Buffer );                     // two rows -> undefined behavior
     return RangeStream.str();
 }
 

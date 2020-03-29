@@ -43,7 +43,7 @@
 
 #include "../UTF8Encoder.hpp"
 
-#define SIMPLE_XLSX_VERSION	"0.34"
+#define SIMPLE_XLSX_VERSION	"0.35"
 
 namespace SimpleXlsx
 {
@@ -762,7 +762,7 @@ class StyleList
 
         std::vector< StylePosInfo > m_stylePos;///< stylePos vector of a number triplet contains style`s alignments and wrap sign:
 
-public:
+    public:
         StyleList();
 
         // *INDENT-OFF*   For AStyle tool
