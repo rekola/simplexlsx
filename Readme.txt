@@ -24,6 +24,10 @@ https://sourceforge.net/projects/simplexlsx/
 This library is distributed under the terms of the zlib license:
 http://www.zlib.net/zlib_license.html
 
+2020-05-12 Version 0.36
+		- Fixed crash when operating system returns NULL instead of username (thanks for this work to J Sher).
+		- The username request has been moved to the function GetSystemUserName from the CWorkbook class constructor (appeared in version r0.21).
+
 2020-03-29 Version 0.35
 		- Fixed undefined behavior with cells ranges for chart serieses (appeared in version r0.34) (thanks to Sergio C and Logan Courtney).
 
@@ -152,7 +156,7 @@ http://www.zlib.net/zlib_license.html
 2012-10-02 Version 0.15
 	Change log:
 		- Linux are supported now (tested on Ubuntu with GCC 4.6.3)
-			- ZIP library ported (under Linux only compressing of files is available)
+		- ZIP library ported (under Linux only compressing of files is available)
 
 2012-09-21 Version 0.14
 	Change log (bug fix):

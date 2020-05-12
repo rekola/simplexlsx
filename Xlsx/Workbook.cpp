@@ -50,6 +50,27 @@
 
 namespace SimpleXlsx
 {
+
+/**
+ * @brief Request a username in the operating system
+ * @return Username or an empty string in case of error
+ */
+UniString GetSystemUserName()
+{
+#ifdef _WIN32
+    wchar_t * Ptr = _wgetenv( L"USERNAME" );
+    if( Ptr != NULL )
+        return UniString( Ptr );
+#else
+    const int EnvVarCount = 2;
+    const char * EnvVar[ EnvVarCount ] = { "USERNAME", "USER" }, * Ptr;
+    for( int i = 0; i < EnvVarCount; ++i )
+        if( ( Ptr = getenv( EnvVar[ i ] ) ) != NULL )
+            return UniString( Ptr );
+#endif
+    return "";
+}
+
 // ****************************************************************************
 //
 // CWorksheet class implementation
@@ -98,17 +119,6 @@ CWorkbook::CWorkbook( const UniString & UserName ) : m_UserName( UserName )
     if( m_temp_path[ m_temp_path.size() - 1 ] != '/' )
         m_temp_path += "/";
     m_temp_path += TmpStringStream.str();
-
-    //Check the UserName
-    if( m_UserName.empty() )
-    {
-#ifdef _WIN32
-        m_UserName = _wgetenv( L"USERNAME" );
-#else
-        m_UserName = getenv( "USERNAME" );
-#endif
-        if( m_UserName.empty() ) m_UserName = "Unknown";
-    }
 
     m_pathManager = new PathManager( m_temp_path );
 }
@@ -603,7 +613,7 @@ bool CWorkbook::SaveCore()
         xmlw.Tag( "cp:coreProperties" ).Attr( "xmlns:cp", ns_cp ).Attr( "xmlns:dc", ns_dc );
         xmlw.Attr( "xmlns:dcterms", ns_dcterms ).Attr( "xmlns:dcmitype", ns_dcmitype ).Attr( "xmlns:xsi", ns_xsi );
         xmlw.TagOnlyContent( "dc:creator", m_UserName );
-        xmlw.TagOnlyContent( "cp:lastModifiedBy", m_UserName );
+//        xmlw.TagOnlyContent( "cp:lastModifiedBy", m_UserName );
         xmlw.Tag( "dcterms:created" ).Attr( "xsi:type", xsi_type ).Cont( UserTime ).End();
         xmlw.Tag( "dcterms:modified" ).Attr( "xsi:type", xsi_type ).Cont( UserTime ).End();
         xmlw.End( "cp:coreProperties" );

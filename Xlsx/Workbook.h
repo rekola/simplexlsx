@@ -35,6 +35,8 @@ class CDrawing;
 class PathManager;
 class XMLWriter;
 
+UniString GetSystemUserName();
+
 // ****************************************************************************
 /// @brief	The class CWorkbook is used to manage creation, population and saving .xlsx files
 // ****************************************************************************
@@ -61,7 +63,7 @@ class CWorkbook
 
         struct DefinedName
         {
-            const SimpleXlsx::CSheet    * CSheet, * ScopeSheet;
+            const SimpleXlsx::CSheet  * CSheet, * ScopeSheet;
             std::string                 Comment, PostFix;
 
             inline DefinedName( double AConstant, const UniString & AComment, const SimpleXlsx::CSheet * AScopeSheet ) :
