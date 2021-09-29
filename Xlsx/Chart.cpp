@@ -1,6 +1,6 @@
 /*
   SimpleXlsxWriter
-  Copyright (C) 2012-2020 Pavel Akimov <oxod.pavel@gmail.com>, Alexandr Belyak <programmeralex@bk.ru>
+  Copyright (C) 2012-2021 Pavel Akimov <oxod.pavel@gmail.com>, Alexandr Belyak <programmeralex@bk.ru>
 
   This software is provided 'as-is', without any express or implied
   warranty. In no event will the authors be held liable for any damages
@@ -51,14 +51,10 @@ CChart::CChart( size_t index, EChartTypes type, PathManager & pathmanager ) :  m
     m_y2Axis.id = 103;
 
     m_xAxis.pos = POS_BOTTOM;
-    m_xAxis.sourceLinked = false;
     m_yAxis.pos = POS_LEFT;
-    m_yAxis.sourceLinked = true;
     m_x2Axis.pos = POS_TOP;
-    m_x2Axis.sourceLinked = false;
     m_x2Axis.cross = CROSS_MAX;
     m_y2Axis.pos = POS_RIGHT;
-    m_y2Axis.sourceLinked = true;
     m_y2Axis.cross = CROSS_MAX;
 }
 
@@ -119,13 +115,12 @@ bool CChart::Save()
         }
         case CHART_SCATTER  :
         {
-            m_xAxis.sourceLinked = true;
             AddScatterChart( xmlw, m_xAxis.id, m_yAxis.id, m_diagramm, m_seriesSet, 0, m_diagramm.scatterStyle );
             break;
         }
         case CHART_PIE      :
         {
-            AddPieChart( xmlw, m_xAxis, m_diagramm, m_seriesSet, 0 );
+            AddPieChart( xmlw, m_diagramm, m_seriesSet, 0 );
             break;
         }
         case CHART_NONE     : return false;
@@ -149,13 +144,12 @@ bool CChart::Save()
             }
             case CHART_SCATTER  :
             {
-                m_xAxis.sourceLinked = true;
                 AddScatterChart( xmlw, m_x2Axis.id, m_y2Axis.id, m_diagramm, m_seriesSetAdd, m_seriesSet.size(), m_diagramm.scatterStyle );
                 break;
             }
             case CHART_PIE      :
             {
-                AddPieChart( xmlw, m_x2Axis, m_diagramm, m_seriesSetAdd, m_seriesSet.size() );
+                AddPieChart( xmlw, m_diagramm, m_seriesSetAdd, m_seriesSet.size() );
                 break;
             }
             case CHART_NONE     : break;
@@ -329,6 +323,91 @@ void CChart::AddLegend( XMLWriter & xmlw, EPosition legend_pos )
     xmlw.End( "c:legend" );
 }
 
+static const char * AxisTypeToTag( CChart::EAxisType Type )
+{
+    switch( Type )
+    {
+        case CChart::AXIS_VALUE     : return "c:valAx";
+        case CChart::AXIS_DATE      : return "c:dateAx";
+        case CChart::AXIS_CATEGORY  : return "c:catAx";
+        default                     : return "c:valAx";
+    }
+}
+
+static const char * TickMarkToTag( CChart::ETickMark Mark )
+{
+    switch( Mark )
+    {
+        case CChart::MARK_NONE      : return "none";
+        case CChart::MARK_CROSS     : return "cross";
+        case CChart::MARK_INSIDE    : return "in";
+        case CChart::MARK_OUTSIDE   : return "out";
+        default                     : return "none";
+    }
+}
+
+static const char * TimeUnitToTag( CChart::ETimeUnit Unit )
+{
+    switch( Unit )
+    {
+        case CChart::TIME_UNIT_DAYS     : return "days";
+        case CChart::TIME_UNIT_MONTHS   : return "months";
+        case CChart::TIME_UNIT_YEARS    : return "years";
+        default                         : return "days";
+    }
+}
+
+static void AddTickMarks( XMLWriter & xmlw, const CChart::TickMark & m, bool asMajor, CChart::EAxisType AxisType )
+{
+    xmlw.TagL( asMajor ? "c:majorTickMark" : "c:minorTickMark" ).Attr( "val", TickMarkToTag( m.type ) ).EndL();
+    if( m.unit <= 0 )   // auto
+        return;
+    xmlw.TagL( asMajor ? "c:majorUnit" : "c:minorUnit" ).Attr( "val", m.unit ).EndL();
+    if( AxisType == CChart::AXIS_DATE )
+        xmlw.TagL( asMajor ? "c:majorTimeUnit" : "c:minorTimeUnit" ).Attr( "val", TimeUnitToTag( m.timeUnit ) ).EndL();
+}
+
+void CChart::AddAxisCommon( XMLWriter & xmlw, const Axis & x, uint32_t crossAxisId, bool AsX )
+{
+    xmlw.Tag( AxisTypeToTag( x.axisType ) ).TagL( "c:axId" ).Attr( "val", x.id ).EndL();
+
+    xmlw.Tag( "c:scaling" ).TagL( "c:orientation" ).Attr( "val", "minMax" ).EndL();
+    if( x.minValue != "" ) xmlw.TagL( "c:min" ).Attr( "val", x.minValue ).EndL();
+    if( x.maxValue != "" ) xmlw.TagL( "c:max" ).Attr( "val", x.maxValue ).EndL();
+    xmlw.End( "c:scaling" );
+
+    xmlw.TagL( "c:delete" ).Attr( "val", x.pos == POS_NONE ? 1 : 0 ).EndL();
+    xmlw.TagL( "c:axPos" ).Attr( "val", GetCharForPos( x.pos, AsX ? 'b' : 'l' ) ).EndL();
+
+    AddTickMarks( xmlw, x.majorTickMarks, true, x.axisType );
+    AddTickMarks( xmlw, x.minorTickMarks, false, x.axisType );
+
+    if( x.gridLines == GRID_MAJOR ) xmlw.TagL( "c:majorGridlines" ).EndL();
+    else if( x.gridLines == GRID_MINOR ) xmlw.TagL( "c:minorGridlines" ).EndL();
+    else if( x.gridLines == GRID_MAJOR_N_MINOR ) xmlw.TagL( "c:majorGridlines" ).EndL().TagL( "c:minorGridlines" ).EndL();
+
+    if( ! x.name.empty() )
+        AddTitle( xmlw, x.name, x.nameSize, ! AsX );
+
+    xmlw.TagL( "c:tickLblPos" ).Attr( "val", "nextTo" ).EndL();
+
+    if( crossAxisId != 0 )
+    {
+        xmlw.TagL( "c:crossAx" ).Attr( "val", crossAxisId ).EndL().TagL( "c:crosses" );
+
+        if( x.cross == CROSS_AUTO_ZERO ) xmlw.Attr( "val", "autoZero" ).EndL();
+        else if( x.cross == CROSS_MIN ) xmlw.Attr( "val", "min" ).EndL();
+        else if( x.cross == CROSS_MAX ) xmlw.Attr( "val", "max" ).EndL();
+        else  xmlw.EndL();
+
+        if( ! AsX )
+            xmlw.TagL( "c:crossBetween" ).Attr( "val", "between" ).EndL();
+    }
+
+    xmlw.TagL( "c:numFmt" ).Attr( "formatCode", x.formatCode ).Attr( "sourceLinked", x.sourceLinked ? 1 : 0 ).EndL();
+}
+
+
 // ****************************************************************************
 /// @brief  Internal method adds X axis block into chart
 /// @param  x reference to an axis object
@@ -338,40 +417,13 @@ void CChart::AddLegend( XMLWriter & xmlw, EPosition legend_pos )
 
 void CChart::AddXAxis( XMLWriter & xmlw, const Axis & x, uint32_t crossAxisId )
 {
-    xmlw.Tag( x.isVal ? "c:valAx" : "c:catAx" ).TagL( "c:axId" ).Attr( "val", x.id ).EndL(); /// val/cat issue patch
-    xmlw.Tag( "c:scaling" ).TagL( "c:orientation" ).Attr( "val", "minMax" ).EndL();
-    if( x.minValue != "" ) xmlw.TagL( "c:min" ).Attr( "val", x.minValue ).EndL();
-    if( x.maxValue != "" ) xmlw.TagL( "c:max" ).Attr( "val", x.maxValue ).EndL();
-    xmlw.End( "c:scaling" );
-
-    if( x.pos == POS_NONE ) xmlw.TagL( "c:delete" ).Attr( "val", 1 ).EndL();
-    else xmlw.TagL( "c:delete" ).Attr( "val", 0 ).EndL();
-    xmlw.TagL( "c:axPos" ).Attr( "val", GetCharForPos( x.pos, 'b' ) ).EndL();
-    xmlw.TagL( "c:majorTickMark" ).Attr( "val", "none" ).EndL();
-    xmlw.TagL( "c:minorTickMark" ).Attr( "val", "none" ).EndL();
-
-    if( x.gridLines == GRID_MAJOR ) xmlw.TagL( "c:majorGridlines" ).EndL();
-    else if( x.gridLines == GRID_MINOR ) xmlw.TagL( "c:minorGridlines" ).EndL();
-    else if( x.gridLines == GRID_MAJOR_N_MINOR ) xmlw.TagL( "c:majorGridlines" ).EndL().TagL( "c:minorGridlines" ).EndL();
-
-    if( ! x.name.empty() )
-        AddTitle( xmlw, x.name, x.nameSize, false );
-
-    xmlw.TagL( "c:tickLblPos" ).Attr( "val", "nextTo" ).EndL();
+    AddAxisCommon( xmlw, x, crossAxisId, true );
 
     if( x.lblAngle != -1 )
     {
         xmlw.Tag( "c:txPr" ).TagL( "a:bodyPr" ).Attr( "rot", x.lblAngle * 60000 ).EndL().TagL( "a:lstStyle" ).EndL();
         xmlw.Tag( "a:p" ).Tag( "a:pPr" ).TagL( "a:defRPr" ).EndL().End( "a:pPr" );
         xmlw.TagL( "a:endParaRPr" ).Attr( "lang", "en-US" ).EndL().End( "a:p" ).End( "c:txPr" );
-    }
-    if( crossAxisId != 0 )
-    {
-        xmlw.TagL( "c:crossAx" ).Attr( "val", crossAxisId ).EndL().TagL( "c:crosses" );
-        if( x.cross == CROSS_AUTO_ZERO ) xmlw.Attr( "val", "autoZero" ).EndL();
-        else if( x.cross == CROSS_MIN ) xmlw.Attr( "val", "min" ).EndL();
-        else if( x.cross == CROSS_MAX ) xmlw.Attr( "val", "max" ).EndL();
-        else xmlw.EndL();
     }
 
     xmlw.TagL( "c:auto" ).Attr( "val", 1 ).EndL();
@@ -382,7 +434,7 @@ void CChart::AddXAxis( XMLWriter & xmlw, const Axis & x, uint32_t crossAxisId )
     if( x.markSkipInterval != -1 ) xmlw.TagL( "c:tickMarkSkip" ).Attr( "val", x.markSkipInterval ).EndL();
     xmlw.TagL( "c:noMultiLvlLbl" ).Attr( "val", 0 ).EndL();
 
-    xmlw.End( x.isVal ? "c:valAx" : "c:catAx" ); /// val/cat issue patch
+    xmlw.End( AxisTypeToTag( x.axisType ) );
 }
 // ****************************************************************************
 /// @brief  Internal method adds Y axis block into chart
@@ -392,45 +444,8 @@ void CChart::AddXAxis( XMLWriter & xmlw, const Axis & x, uint32_t crossAxisId )
 // ****************************************************************************
 void CChart::AddYAxis( XMLWriter & xmlw, const Axis & y, uint32_t crossAxisId )
 {
-    xmlw.Tag( y.isVal ? "c:valAx" : "c:catAx" ); /// val/cat issue patch   - may be not neccassary here
-    xmlw.TagL( "c:axId" ).Attr( "val", y.id ).EndL();
-
-    xmlw.Tag( "c:scaling" );
-    xmlw.TagL( "c:orientation" ).Attr( "val", "minMax" ).EndL();
-    if( y.minValue != "" ) xmlw.TagL( "c:min" ).Attr( "val", y.minValue ).EndL();
-    if( y.maxValue != "" ) xmlw.TagL( "c:max" ).Attr( "val", y.maxValue ).EndL();
-    xmlw.End( "c:scaling" );
-
-    if( y.pos == POS_NONE ) xmlw.TagL( "c:delete" ).Attr( "val", 1 ).EndL();
-    else xmlw.TagL( "c:delete" ).Attr( "val", 0 ).EndL();
-    xmlw.TagL( "c:axPos" ).Attr( "val", GetCharForPos( y.pos, 'l' ) ).EndL();
-
-    if( y.gridLines == GRID_MAJOR ) xmlw.TagL( "c:majorGridlines" ).EndL();
-    else if( y.gridLines == GRID_MINOR ) xmlw.TagL( "c:minorGridlines" ).EndL();
-    else if( y.gridLines == GRID_MAJOR_N_MINOR ) xmlw.TagL( "c:majorGridlines" ).EndL().TagL( "c:minorGridlines" ).EndL();
-
-    if( ! y.name.empty() )
-        AddTitle( xmlw, y.name, y.nameSize, true );
-
-    if( y.sourceLinked ) xmlw.TagL( "c:numFmt" ).Attr( "formatCode", "General" ).Attr( "sourceLinked", 1 ).EndL();
-
-    xmlw.TagL( "c:majorTickMark" ).Attr( "val", "none" ).EndL();
-    xmlw.TagL( "c:minorTickMark" ).Attr( "val", "none" ).EndL();
-    xmlw.TagL( "c:tickLblPos" ).Attr( "val", "nextTo" ).EndL();
-
-    if( crossAxisId != 0 )
-    {
-        xmlw.TagL( "c:crossAx" ).Attr( "val", crossAxisId ).EndL().TagL( "c:crosses" );
-
-        if( y.cross == CROSS_AUTO_ZERO ) xmlw.Attr( "val", "autoZero" ).EndL();
-        else if( y.cross == CROSS_MIN ) xmlw.Attr( "val", "min" ).EndL();
-        else if( y.cross == CROSS_MAX ) xmlw.Attr( "val", "max" ).EndL();
-        else  xmlw.EndL();
-
-        xmlw.TagL( "c:crossBetween" ).Attr( "val", "between" ).EndL();
-    }
-
-    xmlw.End( y.isVal ? "c:valAx" : "c:catAx" ); /// val/cat issue patch   - may be not neccassary here
+    AddAxisCommon( xmlw, y, crossAxisId, false );
+    xmlw.End( AxisTypeToTag( y.axisType ) );
 }
 
 // ****************************************************************************
@@ -486,16 +501,9 @@ void CChart::AddLineChart( XMLWriter & xmlw, Axis & xAxis, uint32_t yAxisId, con
             const char * dashID = "solid";
             switch( it->DashType )
             {
-                case
-                        Series::dashDot:       dashID = "sysDot";
-                    break;
-                case
-                        Series::dashShortDash: dashID = "sysDash";
-                    break;
-                case
-                        Series::dashDash:      dashID = "dash";
-                    break;
-
+                case Series::dashDot:       dashID = "sysDot"; break;
+                case Series::dashShortDash: dashID = "sysDash"; break;
+                case Series::dashDash:      dashID = "dash"; break;
                 default:;
             }
             xmlw.Tag( "c:spPr" ).Tag( "a:ln" ).Attr( "w", floor( it->LineWidth * 12700 ) );
@@ -509,7 +517,6 @@ void CChart::AddLineChart( XMLWriter & xmlw, Axis & xAxis, uint32_t yAxisId, con
 
         if( ( it->catSheet != NULL ) && ( ( it->catAxisTo.row != 0 ) || ( it->catAxisTo.col != 0 ) ) )
         {
-            xAxis.sourceLinked = true;
             std::string cfRange = CellRangeString( it->catSheet->GetTitle(),
                                                    CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
                                                    CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );
@@ -569,7 +576,6 @@ void CChart::AddBarChart( XMLWriter & xmlw, Axis & xAxis, uint32_t yAxisId, cons
         if( ! it->title.empty() ) xmlw.Tag( "c:tx" ).TagOnlyContent( "c:v", it->title ).End( "c:tx" );
         if( ( it->catSheet != NULL ) && ( ( it->catAxisTo.row != 0 ) || ( it->catAxisTo.col != 0 ) ) )
         {
-            xAxis.sourceLinked = true;
             std::string cfRange = CellRangeString( it->catSheet->GetTitle(),
                                                    CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
                                                    CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );
@@ -735,7 +741,7 @@ void CChart::AddScatterChart( XMLWriter & xmlw, uint32_t xAxisId, uint32_t yAxis
 /// @param  firstSeriesId   is used for synchronization between different line charts
 /// @return no
 // ****************************************************************************
-void CChart::AddPieChart( XMLWriter & xmlw, CChart::Axis & xAxis, const Diagramm & diagramm, const std::vector<CChart::Series> & series, size_t firstSeriesId )
+void CChart::AddPieChart( XMLWriter & xmlw, const Diagramm & diagramm, const std::vector<CChart::Series> & series, size_t firstSeriesId )
 {
     xmlw.Tag( "c:pieChart" );
     xmlw.TagL( "c:varyColors" ).Attr( "val", 1 ).EndL();
@@ -751,7 +757,6 @@ void CChart::AddPieChart( XMLWriter & xmlw, CChart::Axis & xAxis, const Diagramm
         AddDataLabels( xmlw, it->dataLabels, true );
         if( ( it->catSheet != NULL ) && ( ( it->catAxisTo.row != 0 ) || ( it->catAxisTo.col != 0 ) ) )
         {
-            xAxis.sourceLinked = true;
             std::string cfRange = CellRangeString( it->catSheet->GetTitle(),
                                                    CellCoord( it->catAxisFrom.row, it->catAxisFrom.col ),
                                                    CellCoord( it->catAxisTo.row, it->catAxisTo.col ) );

@@ -24,7 +24,7 @@ typedef unsigned long ZRESULT;
 
 HZIP CreateZip(const char *fn, const char *password);
 HZIP CreateZip(void *buf,unsigned int len, const char *password);
-HZIP CreateZipHandle(HANDLE h, const char *password);
+HZIP CreateZipHandle(HANDLE h, const char *password, bool CloseHandleAfterSave);
 // CreateZip - call this to start the creation of a zip file.
 // As the zip is being created, it will be stored somewhere:
 // to a pipe:              CreateZipHandle(hpipe_write);

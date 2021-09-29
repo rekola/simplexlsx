@@ -1,6 +1,6 @@
 /*
   SimpleXlsxWriter
-  Copyright (C) 2012-2020 Pavel Akimov <oxod.pavel@gmail.com>, Alexandr Belyak <programmeralex@bk.ru>
+  Copyright (C) 2012-2021 Pavel Akimov <oxod.pavel@gmail.com>, Alexandr Belyak <programmeralex@bk.ru>
 
   This software is provided 'as-is', without any express or implied
   warranty. In no event will the authors be held liable for any damages
@@ -21,6 +21,8 @@
 
 #ifndef XLSX_WORKBOOK_H
 #define XLSX_WORKBOOK_H
+
+#include <cstdio>
 
 #include "SimpleXlsxDef.h"
 
@@ -190,12 +192,13 @@ class CWorkbook
         // Adding a descriptive name to represent a formula.
         CWorkbook & AddDefinedName( const UniString & Name, const UniString & Formula, const UniString & Comment = "", const CSheet * ScopeSheet = NULL );
 
-        //Save current workbook
+        // Save current workbook
         bool Save( const std::string & filename );
         bool Save( const std::wstring & filename );
+        bool Save( FILE * HF, bool CloseHandleAfterSave );
 
     private:
-        //Disable copy and assignment
+        // Disable copy and assignment
         CWorkbook( const CWorkbook & that );
         CWorkbook & operator=( const CWorkbook & );
 
@@ -235,8 +238,9 @@ class CWorkbook
         bool SaveComments();
         bool SaveSharedStrings();
         bool SaveWorkbook();
-
         bool SaveCommentList( const std::vector<Comment *> & comments );
+        bool SaveAllDataToFiles();
+
         void AddComment( XMLWriter & xmlw, const Comment & comment ) const;
         void AddCommentDrawing( XMLWriter & xmlw, const Comment & comment );
         void AddNumberFormats( XMLWriter & xmlw ) const;

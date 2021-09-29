@@ -1,6 +1,6 @@
 /*
   SimpleXlsxWriter
-  Copyright (C) 2012-2020 Pavel Akimov <oxod.pavel@gmail.com>, Alexandr Belyak <programmeralex@bk.ru>
+  Copyright (C) 2012-2021 Pavel Akimov <oxod.pavel@gmail.com>, Alexandr Belyak <programmeralex@bk.ru>
 
   This software is provided 'as-is', without any express or implied
   warranty. In no event will the authors be held liable for any damages
@@ -146,6 +146,15 @@ class CChart
             SMALL_GRID, LARGE_GRID, SMALL_CHECKER_BOARD, LARGE_CHECKER_BOARD, OUTLINED_DIAMOND, SOLID_DIAMOND
         };
 
+        /// @brief The type of axis for chart
+        enum EAxisType { AXIS_VALUE, AXIS_DATE, AXIS_CATEGORY/*, AXIS_SERIES*/ };
+
+        /// @brief Specifies the possible positions for tick marks
+        enum ETickMark { MARK_NONE, MARK_CROSS, MARK_INSIDE, MARK_OUTSIDE };
+
+        /// @brief Specifies a unit of time
+        enum ETimeUnit { TIME_UNIT_DAYS, TIME_UNIT_MONTHS, TIME_UNIT_YEARS };
+
         /// @brief  Structure with color points to setup a gradient fill of chart
         struct GradientStops
         {
@@ -257,6 +266,21 @@ class CChart
             }
         };
 
+        /// @brief  Structure to setup a axis mark
+        struct TickMark
+        {
+            ETickMark   type;       ///< type of tick mark
+            double      unit;       ///< distance between ticks (if <= 0 then auto)
+            ETimeUnit   timeUnit;   ///< time unit for tick marks
+
+            TickMark()
+            {
+                type = MARK_NONE;
+                unit = 0;
+                timeUnit = TIME_UNIT_DAYS;
+            }
+        };
+
     private:
         /// @brief  Structure that describes axis properties
         /// @note	gridLines and sourceLinked properties will have no effect at using with additional axes because of Microsoft Open XML format restrictions
@@ -274,7 +298,14 @@ class CChart
             int lblSkipInterval;	///< space between two neighbour labels
             int markSkipInterval;	///< space between two neighbour marks
             int lblAngle;			///< axis labels angle in degrees
-            bool isVal;            ///< "Val" axis is normal for scatter and line plots
+            EAxisType axisType;     ///< axis type for chart
+
+            TickMark majorTickMarks;///< major tick marks for axis
+            TickMark minorTickMarks;///< minor tick marks for axis
+
+            std::string formatCode; ///< a string representing the format code to apply.
+            ///< See 21.2.2.121 "Ecma Office Open XML Part 1 - Fundamentals And Markup Language Reference"
+
             Axis()
             {
                 id = 0;
@@ -282,7 +313,7 @@ class CChart
                 pos = POS_LEFT;
                 gridLines = GRID_NONE;
                 cross = CROSS_AUTO_ZERO;
-                sourceLinked = false;
+                sourceLinked = true;
 
                 minValue = "";
                 maxValue = "";
@@ -290,7 +321,9 @@ class CChart
                 lblSkipInterval = -1;	// auto
                 markSkipInterval = -1;	// auto
                 lblAngle = -1;			// none
-                isVal = true;
+                axisType = AXIS_VALUE;
+
+                formatCode = "General";
             }
         };
 
@@ -543,7 +576,9 @@ class CChart
         inline CChart & SetXAxisPos( EPosition pos )                { m_xAxis.pos = pos; return * this;                 }
         inline CChart & SetXAxisGrid( EGridLines state )            { m_xAxis.gridLines = state; return * this;         }
         inline CChart & SetXAxisCross( EAxisCross cross )           { m_xAxis.cross = cross; return * this;             }
-
+        inline CChart & SetXAxisMajorTickMarks( TickMark tm )       { m_xAxis.majorTickMarks = tm; return * this;       }
+        inline CChart & SetXAxisMinorTickMarks( TickMark tm )       { m_xAxis.minorTickMarks = tm; return * this;       }
+        inline CChart & SetXAxisFormatCode( const std::string & c ) { m_xAxis.formatCode = c; m_xAxis.sourceLinked = false; return * this;  }
 
         inline CChart & SetYAxisMin( const std::string & value )    { m_yAxis.minValue = value; return * this;  }
         inline CChart & SetYAxisMax( const std::string & value )    { m_yAxis.maxValue = value; return * this;  }
@@ -552,6 +587,9 @@ class CChart
         inline CChart & SetYAxisPos( EPosition pos )                { m_yAxis.pos = pos; return * this;         }
         inline CChart & SetYAxisGrid( EGridLines state )            { m_yAxis.gridLines = state; return * this; }
         inline CChart & SetYAxisCross( EAxisCross cross )           { m_yAxis.cross = cross; return * this;     }
+        inline CChart & SetYAxisMajorTickMarks( TickMark tm )       { m_yAxis.majorTickMarks = tm; return * this;       }
+        inline CChart & SetYAxisMinorTickMarks( TickMark tm )       { m_yAxis.minorTickMarks = tm; return * this;       }
+        inline CChart & SetYAxisFormatCode( const std::string & c ) { m_yAxis.formatCode = c; m_yAxis.sourceLinked = false; return * this;  }
 
 
         inline CChart & SetX2AxisLblInterval( int value )           { m_x2Axis.lblSkipInterval = value; return * this;  }
@@ -564,6 +602,10 @@ class CChart
         inline CChart & SetX2AxisPos( EPosition pos )               { m_x2Axis.pos = pos; return * this;                }
         inline CChart & SetX2AxisGrid( EGridLines state )           { m_x2Axis.gridLines = state; return * this;        }
         inline CChart & SetX2AxisCross( EAxisCross cross )          { m_x2Axis.cross = cross; return * this;            }
+        inline CChart & SetX2AxisMajorTickMarks( TickMark tm )      { m_x2Axis.majorTickMarks = tm; return * this;      }
+        inline CChart & SetX2AxisMinorTickMarks( TickMark tm )      { m_x2Axis.minorTickMarks = tm; return * this;      }
+        inline CChart & SetX2AxisFormatCode( const std::string & c ){ m_x2Axis.formatCode = c; m_x2Axis.sourceLinked = false; return * this;    }
+
 
         inline CChart & SetY2AxisMin( const std::string & value )   { m_y2Axis.minValue = value; return * this;     }
         inline CChart & SetY2AxisMax( const std::string & value )   { m_y2Axis.maxValue = value; return * this;     }
@@ -572,11 +614,20 @@ class CChart
         inline CChart & SetY2AxisPos( EPosition pos )               { m_y2Axis.pos = pos; return * this;            }
         inline CChart & SetY2AxisGrid( EGridLines state )           { m_y2Axis.gridLines = state; return * this;    }
         inline CChart & SetY2AxisCross( EAxisCross cross )          { m_y2Axis.cross = cross; return * this;        }
+        inline CChart & SetY2AxisMajorTickMarks( TickMark tm )      { m_y2Axis.majorTickMarks = tm; return * this;  }
+        inline CChart & SetY2AxisMinorTickMarks( TickMark tm )      { m_y2Axis.minorTickMarks = tm; return * this;  }
+        inline CChart & SetY2AxisFormatCode( const std::string & c ){ m_y2Axis.formatCode = c; m_y2Axis.sourceLinked = false; return * this;    }
+
 ///< Patch to val/cat issue E.N.
-        inline CChart & SetXAxisToCat(const bool set2val=false )    { m_xAxis.isVal = set2val; return * this;   }
-        inline CChart & SetYAxisToCat(const bool set2val=false )    { m_yAxis.isVal = set2val; return * this;   }
-        inline CChart & SetX2AxisToCat(const bool set2val=false )   { m_x2Axis.isVal = set2val; return * this;  }
-        inline CChart & SetY2AxisToCat(const bool set2val=false )   { m_y2Axis.isVal = set2val; return * this;  }
+        inline CChart & SetXAxisToCat(const bool set2val=false )    { m_xAxis.axisType = set2val ? AXIS_VALUE : AXIS_CATEGORY; return * this;   }
+        inline CChart & SetYAxisToCat(const bool set2val=false )    { m_yAxis.axisType = set2val ? AXIS_VALUE : AXIS_CATEGORY; return * this;   }
+        inline CChart & SetX2AxisToCat(const bool set2val=false )   { m_x2Axis.axisType = set2val ? AXIS_VALUE : AXIS_CATEGORY; return * this;  }
+        inline CChart & SetY2AxisToCat(const bool set2val=false )   { m_y2Axis.axisType = set2val ? AXIS_VALUE : AXIS_CATEGORY; return * this;  }
+
+        inline CChart & SetXAxisType( EAxisType Type )              { m_xAxis.axisType =Type; return * this;    }
+        inline CChart & SetYAxisType( EAxisType Type )              { m_yAxis.axisType =Type; return * this;    }
+        inline CChart & SetX2AxisType( EAxisType Type )             { m_x2Axis.axisType =Type; return * this;   }
+        inline CChart & SetY2AxisType( EAxisType Type )             { m_y2Axis.axisType =Type; return * this;   }
 
         // *INDENT-ON*    For AStyle tool
 
@@ -596,6 +647,7 @@ class CChart
         static void AddTitle( XMLWriter & xmlw, const UniString & name, uint32_t size, bool vertPos );
         static void AddTableData( XMLWriter & xmlw, ETableData tableData );
         static void AddLegend( XMLWriter & xmlw, EPosition legend_pos );
+        static void AddAxisCommon( XMLWriter & xmlw, const Axis & x, uint32_t crossAxisId, bool AsX );
         static void AddXAxis( XMLWriter & xmlw, const Axis & x, uint32_t crossAxisId = 0 );
         static void AddYAxis( XMLWriter & xmlw, const Axis & y, uint32_t crossAxisId = 0 );
 
@@ -605,7 +657,7 @@ class CChart
                                  const std::vector<Series> & series, size_t firstSeriesId, EBarDirection barDir, EBarGrouping barGroup );
         static void AddScatterChart( XMLWriter & xmlw, uint32_t xAxisId, uint32_t yAxisId, const Diagramm & diagramm,
                                      const std::vector<Series> & series, size_t firstSeriesId, EScatterStyle style );
-        static void AddPieChart( XMLWriter & xmlw, Axis & xAxis, const Diagramm & diagramm,
+        static void AddPieChart( XMLWriter & xmlw, const Diagramm & diagramm,
                                  const std::vector<Series> & series, size_t firstSeriesId );
         static void AddMarker( XMLWriter & xmlw, const Series & ser, const char * markerID );
         static void AddAreaFill( XMLWriter & xmlw, const AreaFill & areaFill );

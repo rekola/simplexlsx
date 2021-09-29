@@ -24,6 +24,12 @@ https://sourceforge.net/projects/simplexlsx/
 This library is distributed under the terms of the zlib license:
 http://www.zlib.net/zlib_license.html
 
+2021-09-26 Version 0.37
+		- Added function CWorkbook::Save( FILE * handle, bool CloseHandleAfterSave ) for saving to a file/stream by its handle (thanks for this work to E.Naumovich).
+		- Added axis type "date". See methods like CChart::SetXAxisType (thanks to Leonardo Pollock ).
+		- Added markers on the axis. See methods like CChart::SetXAxisMajorTickMarks and CChart::SetXAxisMinorTickMarks.
+                - Added example of a mixed chart with line and bar serieses (MixedLineAndBarChart.cpp).
+
 2020-05-12 Version 0.36
 		- Fixed crash when operating system returns NULL instead of username (thanks for this work to J Sher).
 		- The username request has been moved to the function GetSystemUserName from the CWorkbook class constructor (appeared in version r0.21).

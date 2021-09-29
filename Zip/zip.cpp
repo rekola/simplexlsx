@@ -2964,7 +2964,13 @@ HZIP CreateZipInternal(void *z,unsigned int len,DWORD flags, const char *passwor
   TZipHandleData *han = new TZipHandleData;
   han->flag=2; han->zip=zip; return (HZIP)han;
 }
-HZIP CreateZipHandle(HANDLE h, const char *password) {return CreateZipInternal(h,0,ZIP_HANDLE,password);}
+HZIP CreateZipHandle(HANDLE h, const char *password, bool CloseHandleAfterSave )
+{
+    HZIP res = CreateZipInternal(h,0,ZIP_HANDLE,password);
+    if( res != 0 )
+        reinterpret_cast< TZipHandleData * >( res )->zip->mustclosehfout = CloseHandleAfterSave;
+    return res;
+}
 HZIP CreateZip(const char *fn, const char *password) {return CreateZipInternal((void*)fn,0,ZIP_FILENAME,password);}
 HZIP CreateZip(void *z,unsigned int len, const char *password) {return CreateZipInternal(z,len,ZIP_MEMORY,password);}
 

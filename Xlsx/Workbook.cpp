@@ -1,6 +1,6 @@
 /*
   SimpleXlsxWriter
-  Copyright (C) 2012-2020 Pavel Akimov <oxod.pavel@gmail.com>, Alexandr Belyak <programmeralex@bk.ru>
+  Copyright (C) 2012-2021 Pavel Akimov <oxod.pavel@gmail.com>, Alexandr Belyak <programmeralex@bk.ru>
 
   This software is provided 'as-is', without any express or implied
   warranty. In no event will the authors be held liable for any damages
@@ -20,6 +20,7 @@
 */
 
 #include <algorithm>
+#include <cstdio>
 #include <errno.h>
 #include <locale>
 #include <stdlib.h>
@@ -28,6 +29,7 @@
 
 #ifdef _WIN32
 #include <windows.h>	// for ZIP
+#include <io.h>
 #include <direct.h>
 #include <iostream>
 #else
@@ -271,6 +273,26 @@ CWorkbook & CWorkbook::AddDefinedName( const UniString & Name, const UniString &
     return * this;
 }
 
+static bool AddFilesToZIP( const std::string & temp_path, HZIP hZip, PathManager * pathManager )
+{
+    assert( hZip != 0 );
+    bool Result = true;
+    std::vector< std::string >::const_iterator end_it = pathManager->ContentFiles().end();
+    for( std::vector< std::string >::const_iterator it = pathManager->ContentFiles().begin(); it != end_it; it++ )
+    {
+        const std::string & File = * it;
+        std::string Path = temp_path + File;
+        ZRESULT res = ZipAdd( hZip, File.c_str() + 1, Path.c_str() );
+        if( res != ZR_OK )
+        {
+            Result = false;
+            break;
+        }
+    }
+    CloseZip( hZip );
+    return Result;
+}
+
 // ****************************************************************************
 /// @brief  Saves workbook into the specified file
 /// @param  name full path to the file
@@ -278,47 +300,39 @@ CWorkbook & CWorkbook::AddDefinedName( const UniString & Name, const UniString &
 // ****************************************************************************
 bool CWorkbook::Save( const std::string & filename )
 {
-    if( !SaveCore() || !SaveApp() || !SaveContentType() || !SaveTheme() ||
-            !SaveComments() || !SaveSharedStrings() || !SaveStyles() || !SaveWorkbook() )
+    if( ! SaveAllDataToFiles() )
         return false;
-
-    for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
-        if( ( * it )->Save() == false ) return false;
-
-    for( std::vector<CChartsheet *>::const_iterator it = m_chartsheets.begin(); it != m_chartsheets.end(); it++ )
-        if( ( * it )->Save() == false ) return false;
-    for( std::vector<CChart *>::const_iterator it = m_charts.begin(); it != m_charts.end(); it++ )
-        if( ( * it )->Save() == false ) return false;
-    for( std::vector<CDrawing *>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++ )
-        if( ( * it )->Save() == false ) return false;
-
-    bool bRetCode = true;
-
     HZIP hZip = CreateZip( filename.c_str(), NULL ); // create .zip without encryption
-    if( hZip != 0 )
-    {
-        std::vector< std::string >::const_iterator end_it = m_pathManager->ContentFiles().end();
-        for( std::vector< std::string >::const_iterator it = m_pathManager->ContentFiles().begin(); it != end_it; it++ )
-        {
-            const std::string & File = * it;
-            std::string Path = m_temp_path + File;
-            ZRESULT res = ZipAdd( hZip, File.c_str() + 1, Path.c_str() );
-            if( res != ZR_OK )
-            {
-                bRetCode = false;
-                break;
-            }
-        }
-        CloseZip( hZip );
-    }
-    else bRetCode = false;
-
+    bool bRetCode = hZip != 0 ? AddFilesToZIP( m_temp_path, hZip, m_pathManager ) : false;
     m_pathManager->ClearTemp();
     return bRetCode;
 }
 bool CWorkbook::Save( const std::wstring & filename )
 {
     return Save( PathManager::PathEncode( filename ) );
+}
+
+// ****************************************************************************
+/// @brief  Saves workbook into the file/stream by its handle
+/// @param  handle of the file/stream
+/// @return Boolean result of the operation
+// ****************************************************************************
+#ifdef _WIN32
+bool CWorkbook::Save( FILE * HF, bool CloseHandleAfterSave )
+{
+    int dfl = fileno( HF );
+    HANDLE * H = static_cast< HANDLE * >( HANDLE( _get_osfhandle( dfl ) ) );
+#else
+bool CWorkbook::Save( FILE * HF )
+{
+    void * H = HF;
+#endif
+    if( ! SaveAllDataToFiles() )
+        return false;
+    HZIP hZip = CreateZipHandle( H, NULL, CloseHandleAfterSave ); // create .zip without encryption
+    bool bRetCode = hZip != 0 ? AddFilesToZIP( m_temp_path, hZip, m_pathManager ) : false;
+    m_pathManager->ClearTemp();
+    return bRetCode;
 }
 
 // ****************************************************************************
@@ -613,7 +627,7 @@ bool CWorkbook::SaveCore()
         xmlw.Tag( "cp:coreProperties" ).Attr( "xmlns:cp", ns_cp ).Attr( "xmlns:dc", ns_dc );
         xmlw.Attr( "xmlns:dcterms", ns_dcterms ).Attr( "xmlns:dcmitype", ns_dcmitype ).Attr( "xmlns:xsi", ns_xsi );
         xmlw.TagOnlyContent( "dc:creator", m_UserName );
-//        xmlw.TagOnlyContent( "cp:lastModifiedBy", m_UserName );
+        //        xmlw.TagOnlyContent( "cp:lastModifiedBy", m_UserName );
         xmlw.Tag( "dcterms:created" ).Attr( "xsi:type", xsi_type ).Cont( UserTime ).End();
         xmlw.Tag( "dcterms:modified" ).Attr( "xsi:type", xsi_type ).Cont( UserTime ).End();
         xmlw.End( "cp:coreProperties" );
@@ -1462,6 +1476,28 @@ bool CWorkbook::SaveCommentList( const std::vector<Comment *> & comments )
         xmlw.End( "xml" );
         // zip/xl/drawings/vmlDrawingN.xml -]
     }
+    return true;
+}
+
+// ****************************************************************************
+/// @brief  Saves workbook data into temporary files
+/// @return Boolean result of the operation
+// ****************************************************************************
+bool CWorkbook::SaveAllDataToFiles()
+{
+    if( !SaveCore() || !SaveApp() || !SaveContentType() || !SaveTheme() ||
+            !SaveComments() || !SaveSharedStrings() || !SaveStyles() || !SaveWorkbook() )
+        return false;
+
+    for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
+        if( ( * it )->Save() == false ) return false;
+
+    for( std::vector<CChartsheet *>::const_iterator it = m_chartsheets.begin(); it != m_chartsheets.end(); it++ )
+        if( ( * it )->Save() == false ) return false;
+    for( std::vector<CChart *>::const_iterator it = m_charts.begin(); it != m_charts.end(); it++ )
+        if( ( * it )->Save() == false ) return false;
+    for( std::vector<CDrawing *>::const_iterator it = m_drawings.begin(); it != m_drawings.end(); it++ )
+        if( ( * it )->Save() == false ) return false;
     return true;
 }
 
