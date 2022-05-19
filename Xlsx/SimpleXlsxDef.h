@@ -43,7 +43,7 @@
 
 #include "../UTF8Encoder.hpp"
 
-#define SIMPLE_XLSX_VERSION	"0.37"
+#define SIMPLE_XLSX_VERSION	"0.38"
 
 namespace SimpleXlsx
 {

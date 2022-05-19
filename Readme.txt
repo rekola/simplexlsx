@@ -24,6 +24,11 @@ https://sourceforge.net/projects/simplexlsx/
 This library is distributed under the terms of the zlib license:
 http://www.zlib.net/zlib_license.html
 
+2022-05-20 Version 0.38
+		- Added scratch sheet with matrix-type access to cells (writing only) (thanks for this work to E.Naumovich).
+       		- Added example for a scratch sheet (thanks for this work to E.Naumovich).
+		- Fixed non-Windows build error due to incorrect  implementation of the CWorkbook::Save function.
+
 2021-09-26 Version 0.37
 		- Added function CWorkbook::Save( FILE * handle, bool CloseHandleAfterSave ) for saving to a file/stream by its handle (thanks for this work to E.Naumovich).
 		- Added axis type "date". See methods like CChart::SetXAxisType (thanks to Leonardo Pollock ).

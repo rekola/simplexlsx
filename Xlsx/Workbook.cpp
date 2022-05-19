@@ -323,7 +323,7 @@ bool CWorkbook::Save( FILE * HF, bool CloseHandleAfterSave )
     int dfl = fileno( HF );
     HANDLE * H = static_cast< HANDLE * >( HANDLE( _get_osfhandle( dfl ) ) );
 #else
-bool CWorkbook::Save( FILE * HF )
+bool CWorkbook::Save( FILE * HF, bool CloseHandleAfterSave )
 {
     void * H = HF;
 #endif
