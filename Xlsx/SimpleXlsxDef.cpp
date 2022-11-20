@@ -70,7 +70,6 @@ void SimpleXlsx::NumFormat::Clear()
 {
     id = 164;
     formatString = "";
-
     numberStyle = NUMSTYLE_GENERAL;
     positiveColor = NUMSTYLE_COLOR_DEFAULT;
     negativeColor = NUMSTYLE_COLOR_DEFAULT;
@@ -87,11 +86,20 @@ bool SimpleXlsx::NumFormat::operator==( const SimpleXlsx::NumFormat & _num ) con
              ( zeroColor == _num.zeroColor ) && ( showThousandsSeparator == _num.showThousandsSeparator ) );
 }
 
+SimpleXlsx::Style::Style()
+{
+    horizAlign = ALIGN_H_NONE;
+    vertAlign = ALIGN_V_NONE;
+    wrapText = false;
+    textRotation = 0;
+}
+
 void SimpleXlsx::Style::Clear()
 {
     font.Clear();
     fill.Clear();
     border.Clear();
+    numFormat.Clear();
     horizAlign = ALIGN_H_NONE;
     vertAlign = ALIGN_V_NONE;
     wrapText = false;

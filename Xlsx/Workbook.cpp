@@ -322,18 +322,29 @@ bool CWorkbook::Save( FILE * HF, bool CloseHandleAfterSave )
 {
     int dfl = fileno( HF );
     HANDLE * H = static_cast< HANDLE * >( HANDLE( _get_osfhandle( dfl ) ) );
+    if( ! SaveAllDataToFiles() )
+        return false;
+    HZIP hZip = CreateZipHandle( H, NULL, false ); // create .zip without encryption
+    bool bRetCode = hZip != 0 ? AddFilesToZIP( m_temp_path, hZip, m_pathManager ) : false;
+    m_pathManager->ClearTemp();
+    if( CloseHandleAfterSave )
+        fclose( HF );
+    return bRetCode;
+}
 #else
 bool CWorkbook::Save( FILE * HF, bool CloseHandleAfterSave )
 {
     void * H = HF;
-#endif
     if( ! SaveAllDataToFiles() )
         return false;
-    HZIP hZip = CreateZipHandle( H, NULL, CloseHandleAfterSave ); // create .zip without encryption
+    HZIP hZip = CreateZipHandle( H, NULL, false ); // create .zip without encryption
     bool bRetCode = hZip != 0 ? AddFilesToZIP( m_temp_path, hZip, m_pathManager ) : false;
     m_pathManager->ClearTemp();
+    if( CloseHandleAfterSave )
+        fclose( HF );
     return bRetCode;
 }
+#endif
 
 // ****************************************************************************
 /// @brief  Adds another data sheet into the workbook

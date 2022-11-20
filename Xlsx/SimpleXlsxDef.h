@@ -43,7 +43,7 @@
 
 #include "../UTF8Encoder.hpp"
 
-#define SIMPLE_XLSX_VERSION	"0.38"
+#define SIMPLE_XLSX_VERSION	"0.39"
 
 namespace SimpleXlsx
 {
@@ -698,25 +698,20 @@ struct Comment
 /// @see    EBorder
 /// @see    EAlignHoriz
 /// @see    EAlignVert
-class Style
+struct Style
 {
-    public:
-        Font font;				///< font structure object describes font
-        Fill fill;				///< fill structure object describes fill
-        Border border;			///< border combination of border attributes
-        NumFormat numFormat;	///< numFormat structure object describes numeric cell representation
-        EAlignHoriz horizAlign;	///< horizAlign cell content horizontal alignment value
-        EAlignVert vertAlign;	///< vertAlign cell content vertical alignment value
-        bool wrapText;			///< wrapText text wrapping property
-        int textRotation;       ///< textRotation angle in degree from -90 to 90
+    Font font;				///< font structure object describes font
+    Fill fill;				///< fill structure object describes fill
+    Border border;			///< border combination of border attributes
+    NumFormat numFormat;	///< numFormat structure object describes numeric cell representation
+    EAlignHoriz horizAlign;	///< horizAlign cell content horizontal alignment value
+    EAlignVert vertAlign;	///< vertAlign cell content vertical alignment value
+    bool wrapText;			///< wrapText text wrapping property
+    int textRotation;       ///< textRotation angle in degree from -90 to 90
 
-    public:
-        Style()
-        {
-            Clear();
-        }
+    Style();
 
-        void Clear();
+    void Clear();
 };
 
 /// @brief  This structure represents a handle to manage newly adding styles to avoid dublicating

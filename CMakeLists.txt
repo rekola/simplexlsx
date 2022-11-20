@@ -29,11 +29,16 @@ file(GLOB ZIP_HDRS
     "Zip/*.h"
     )
 
+file(GLOB SCRATCH_HDRS
+    "scratch/*.h"
+    )
+
 file(GLOB SRCS
     "*.cpp"
     "Xlsx/*.cpp"
     "XLSXColors/*.cpp"
     "Zip/*.cpp"
+    "scratch/*.cpp"
     )
 
 add_library(SimpleXlsx STATIC
@@ -42,6 +47,7 @@ add_library(SimpleXlsx STATIC
             ${XLSX_HDRS}
             ${XLSXCOLORS_HDRS}
             ${ZIP_HDRS}
+            ${SCRATCH_HDRS}
             )
 set_target_properties(SimpleXlsx PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
@@ -50,3 +56,4 @@ install(FILES ${MAIN_HDRS} DESTINATION include)
 install(FILES ${XLSX_HDRS} DESTINATION include/Xlsx)
 install(FILES ${XLSXCOLORS_HDRS} DESTINATION include/XLSXColors)
 install(FILES ${ZIP_HDRS} DESTINATION include/Zip)
+install(FILES ${SCRATCH_HDRS} DESTINATION include/scratch)
