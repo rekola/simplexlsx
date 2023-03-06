@@ -351,9 +351,9 @@ bool CWorkbook::Save( FILE * HF, bool CloseHandleAfterSave )
 /// @param  title chart page title
 /// @return Reference to a newly created object
 // ****************************************************************************
-CWorksheet & CWorkbook::CreateSheet( const UniString & title )
+CWorksheet & CWorkbook::CreateSheet( const UniString & title, const CWorksheet::SParams & Params )
 {
-    CWorksheet * sheet = new CWorksheet( m_sheetId++, * CreateDrawing(), * m_pathManager );
+    CWorksheet * sheet = new CWorksheet( m_sheetId++, * CreateDrawing(), * m_pathManager, Params );
     return InitWorkSheet( sheet, title );
 }
 
@@ -363,9 +363,9 @@ CWorksheet & CWorkbook::CreateSheet( const UniString & title )
 /// @param	colWidths list of pairs colNumber:Width
 /// @return Reference to a newly created object
 // ****************************************************************************
-CWorksheet & CWorkbook::CreateSheet( const UniString & title, const std::vector<ColumnWidth> & colWidths )
+CWorksheet & CWorkbook::CreateSheet( const UniString & title, const std::vector<ColumnWidth> & colWidths, const CWorksheet::SParams & Params )
 {
-    CWorksheet * sheet = new CWorksheet( m_sheetId++, colWidths, * CreateDrawing(), * m_pathManager );
+    CWorksheet * sheet = new CWorksheet( m_sheetId++, colWidths, * CreateDrawing(), * m_pathManager, Params );
     return InitWorkSheet( sheet, title );
 }
 
@@ -376,9 +376,9 @@ CWorksheet & CWorkbook::CreateSheet( const UniString & title, const std::vector<
 /// @param  frozenHeight frozen pane height (in number of cells from 0)
 /// @return Reference to a newly created object
 // ****************************************************************************
-CWorksheet & CWorkbook::CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight )
+CWorksheet & CWorkbook::CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight, const CWorksheet::SParams & Params )
 {
-    CWorksheet * sheet = new CWorksheet( m_sheetId++, frozenWidth, frozenHeight, * CreateDrawing(), * m_pathManager );
+    CWorksheet * sheet = new CWorksheet( m_sheetId++, frozenWidth, frozenHeight, * CreateDrawing(), * m_pathManager, Params );
     return InitWorkSheet( sheet, title );
 }
 
@@ -390,9 +390,10 @@ CWorksheet & CWorkbook::CreateSheet( const UniString & title, uint32_t frozenWid
 /// @param	colWidths list of pairs colNumber:Width
 /// @return Reference to a newly created object
 // ****************************************************************************
-CWorksheet & CWorkbook::CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight, const std::vector<ColumnWidth> & colWidths )
+CWorksheet & CWorkbook::CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight,
+                                     const std::vector<ColumnWidth> & colWidths, const CWorksheet::SParams & Params )
 {
-    CWorksheet * sheet = new CWorksheet( m_sheetId++, frozenWidth, frozenHeight, colWidths, * CreateDrawing(), * m_pathManager );
+    CWorksheet * sheet = new CWorksheet( m_sheetId++, frozenWidth, frozenHeight, colWidths, * CreateDrawing(), * m_pathManager, Params );
     return InitWorkSheet( sheet, title );
 }
 

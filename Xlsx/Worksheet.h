@@ -49,12 +49,21 @@ class CWorksheet : public CSheet
             PAGE_LANDSCAPE
         };
 
+        /// @brief The SParams struct The parameters of the sheet that are saved in an XLSX file and must be known before creating a Worksheet.
+        /// Fill in carefully. If the values are incorrect, Excel can report a corrupted file. The default values are correct.
+        struct SParams
+        {
+            // Tag "dimension" of the sheet
+            CellCoord   FirstUsedCell;      ///< First used cell with formulas, text content or cell formatting
+            CellCoord   LastUsedCell;       ///< Last used cell with formulas, text content or cell formatting
+        };
+
     private:
         XMLWriter       *       m_XMLWriter;        ///< xml output stream
         std::vector<std::string>m_calcChain;        ///< list of cells with formulae
         std::map<std::string, uint64_t> * m_sharedStrings; ///< pointer to the list of string supposed to be into shared area
         std::vector<Comment> *	m_comments;         ///< pointer to the vector of comments
-        std::list<std::string>  m_mergedCells;	///< list of merged cells` ranges (e.g. A1:B2)
+        std::list<std::string>  m_mergedCells;      ///< list of merged cells` ranges (e.g. A1:B2)
         UniString             	m_title;            ///< page title
         bool                    m_withFormula;      ///< indicates whether the sheet contains formulae
         bool					m_withComments;		///< indicates whether the sheet contains any comments
@@ -178,11 +187,11 @@ class CWorksheet : public CSheet
         }
 
     protected:
-        CWorksheet( size_t index, CDrawing & drawing, PathManager & pathmanager );
-        CWorksheet( size_t index, const std::vector<ColumnWidth> & colHeights, CDrawing & drawing, PathManager & pathmanager );
-        CWorksheet( size_t index, uint32_t width, uint32_t height, CDrawing & drawing, PathManager & pathmanager );
+        CWorksheet( size_t index, CDrawing & drawing, PathManager & pathmanager, const SParams & Params );
+        CWorksheet( size_t index, const std::vector<ColumnWidth> & colHeights, CDrawing & drawing, PathManager & pathmanager, const SParams & Params );
+        CWorksheet( size_t index, uint32_t width, uint32_t height, CDrawing & drawing, PathManager & pathmanager, const SParams & Params );
         CWorksheet( size_t index, uint32_t width, uint32_t height, const std::vector<ColumnWidth> & colHeights,
-                    CDrawing & drawing, PathManager & pathmanager );
+                    CDrawing & drawing, PathManager & pathmanager, const SParams & Params );
         virtual ~CWorksheet();
 
     private:
@@ -197,7 +206,7 @@ class CWorksheet : public CSheet
         inline void     SetComments( std::vector<Comment> * share )             { m_comments = share; }
         // *INDENT-ON*   For AStyle tool
 
-        void Init( uint32_t frozenWidth, uint32_t frozenHeight, const std::vector<ColumnWidth> & colHeights );
+        void Init( uint32_t frozenWidth, uint32_t frozenHeight, const std::vector<ColumnWidth> & colHeights, const SParams & Params );
         void AddFrozenPane( uint32_t width, uint32_t height );
 
         template<typename T>

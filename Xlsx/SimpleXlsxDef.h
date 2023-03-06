@@ -43,7 +43,7 @@
 
 #include "../UTF8Encoder.hpp"
 
-#define SIMPLE_XLSX_VERSION	"0.39"
+#define SIMPLE_XLSX_VERSION	"0.40"
 
 namespace SimpleXlsx
 {
@@ -351,16 +351,17 @@ class CellCoord
 
     public:
         typedef char TConvBuf[ 24 ];    // Max string for $Col$Row\0
+        static const uint32_t   MinRow = 1, MinCol = 0;
         static const uint32_t   MaxRows = 1048576, MaxCols = 16384; // Excel limits
         uint32_t row;	///< row (starts from 1)
         uint32_t col;	///< col (starts from 0)
 
-        CellCoord() : row( 1 ), col( 0 ) {}
+        CellCoord() : row( MinRow ), col( 0 ) {}
         CellCoord( uint32_t _r, uint32_t _c ) : row( _r ), col( _c ) {}
 
         void Clear()
         {
-            row = 1;
+            row = MinRow;
             col = 0;
         }
 
@@ -370,6 +371,15 @@ class CellCoord
         // Transforms the row and the column numerics from uint32_t to coordinate string format with '$' symbols
         std::string ToStringAbs() const;
         char * ToStringAbs( TConvBuf & Buffer ) const;
+
+        inline bool operator==( const CellCoord & other ) const
+        {
+            return ( row == other.row ) && ( col == other.col );
+        }
+        inline bool operator!=( const CellCoord & other ) const
+        {
+            return !( *this == other );
+        }
 
     private:
         template< bool AbsColAndRow >

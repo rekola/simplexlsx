@@ -55,10 +55,11 @@ static CWorksheet & AddCellRoutineTempl( T data, size_t style, const std::string
 /// @note	    The constructor creates an instance with specified sheetX.xml filename
 ///             and without any frozen panes
 // ****************************************************************************
-CWorksheet::CWorksheet( size_t index, CDrawing & drawing, PathManager & pathmanager ) : CSheet( index ), m_pathManager( pathmanager ), m_Drawing( drawing )
+CWorksheet::CWorksheet( size_t index, CDrawing & drawing, PathManager & pathmanager, const SParams & Params ) :
+    CSheet( index ), m_pathManager( pathmanager ), m_Drawing( drawing )
 {
     std::vector<ColumnWidth> colWidths;
-    Init( 0, 0, colWidths );
+    Init( 0, 0, colWidths, Params );
 }
 
 // ****************************************************************************
@@ -69,10 +70,11 @@ CWorksheet::CWorksheet( size_t index, CDrawing & drawing, PathManager & pathmana
 /// @return     no
 // ****************************************************************************
 CWorksheet::CWorksheet( size_t index, uint32_t width, uint32_t height,
-                        CDrawing & drawing, PathManager & pathmanager ) : CSheet( index ), m_pathManager( pathmanager ), m_Drawing( drawing )
+                        CDrawing & drawing, PathManager & pathmanager, const SParams & Params ) :
+    CSheet( index ), m_pathManager( pathmanager ), m_Drawing( drawing )
 {
     std::vector<ColumnWidth> colWidths;
-    Init( width, height, colWidths );
+    Init( width, height, colWidths, Params );
 }
 
 // ****************************************************************************
@@ -84,9 +86,10 @@ CWorksheet::CWorksheet( size_t index, uint32_t width, uint32_t height,
 ///             and without any frozen panes
 // ****************************************************************************
 CWorksheet::CWorksheet( size_t index, const std::vector<ColumnWidth> & colWidths,
-                        CDrawing & drawing, PathManager & pathmanager ) : CSheet( index ), m_pathManager( pathmanager ), m_Drawing( drawing )
+                        CDrawing & drawing, PathManager & pathmanager, const SParams & Params ) :
+    CSheet( index ), m_pathManager( pathmanager ), m_Drawing( drawing )
 {
-    Init( 0, 0, colWidths );
+    Init( 0, 0, colWidths, Params );
 }
 
 // ****************************************************************************
@@ -98,9 +101,9 @@ CWorksheet::CWorksheet( size_t index, const std::vector<ColumnWidth> & colWidths
 /// @return     no
 // ****************************************************************************
 CWorksheet::CWorksheet( size_t index, uint32_t width, uint32_t height, const std::vector<ColumnWidth> & colWidths,
-                        CDrawing & drawing, PathManager & pathmanager ) : CSheet( index ),  m_pathManager( pathmanager ), m_Drawing( drawing )
+                        CDrawing & drawing, PathManager & pathmanager, const SParams & Params ) : CSheet( index ),  m_pathManager( pathmanager ), m_Drawing( drawing )
 {
-    Init( width, height, colWidths );
+    Init( width, height, colWidths, Params );
 }
 
 // ****************************************************************************
@@ -119,7 +122,7 @@ CWorksheet::~CWorksheet()
 /// @param	colWidths list of pairs colNumber:Width
 /// @return no
 // ****************************************************************************
-void CWorksheet::Init( uint32_t frozenWidth, uint32_t frozenHeight, const std::vector<ColumnWidth> & colWidths )
+void CWorksheet::Init( uint32_t frozenWidth, uint32_t frozenHeight, const std::vector<ColumnWidth> & colWidths, const SParams & Params )
 {
     m_isOk = true;
     m_row_opened = false;
@@ -145,7 +148,10 @@ void CWorksheet::Init( uint32_t frozenWidth, uint32_t frozenHeight, const std::v
     }
 
     m_XMLWriter->Tag( "worksheet" ).Attr( "xmlns", ns_book ).Attr( "xmlns:r", ns_book_r ).Attr( "xmlns:mc", ns_mc ).Attr( "mc:Ignorable", "x14ac" ).Attr( "xmlns:x14ac", ns_x14ac );
-    m_XMLWriter->TagL( "dimension" ).Attr( "ref", "A1" ).EndL();
+    // Tag "dimension"
+    if( ( Params.FirstUsedCell == Params.LastUsedCell ) && ( Params.FirstUsedCell == CellCoord() ) )    // No cells with data or default values
+        m_XMLWriter->TagL( "dimension" ).Attr( "ref", "A1" ).EndL();
+    else m_XMLWriter->TagL( "dimension" ).Attr( "ref", Params.FirstUsedCell.ToString() + ":" + Params.LastUsedCell.ToString() ).EndL();
     m_XMLWriter->Tag( "sheetViews" ).Tag( "sheetView" ).Attr( "tabSelected", 0 ).Attr( "workbookViewId", 0 );
     if( frozenWidth != 0 || frozenHeight != 0 )
         AddFrozenPane( frozenWidth, frozenHeight );

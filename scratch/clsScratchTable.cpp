@@ -167,4 +167,14 @@ size_t clsScratchTable::FindCell(const size_t row,const size_t col, const size_t
  };
    return  Cells.size();
    }
-
+//-------------------------------------------------------------
+ void clsScratchTable::GetDim(size_t &rw, size_t & cl) const  {
+ rw=0;
+ cl=0;
+ for(const auto &c:Cells)
+     if(c.priority<1){
+        if(c.row>rw) rw=c.row; 
+        if(c.col>cl) cl=c.col;
+     }
+  rw++;
+};

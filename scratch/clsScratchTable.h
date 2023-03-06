@@ -128,6 +128,7 @@ public:
   void Sort(); // row-col-priority;  it also deletes ovewritten and marked-to-delete cells. Used automatically
   size_t InsertTo(SimpleXlsx::CWorksheet & sheet);
   void Clear() {Cells.clear(); counter=0;};
+  void GetDim(size_t &rw, size_t & cl) const;
   clsScratchTable(){counter=0; };
   virtual ~clsScratchTable();
 };

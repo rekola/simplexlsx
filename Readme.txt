@@ -24,6 +24,10 @@ https://sourceforge.net/projects/simplexlsx/
 This library is distributed under the terms of the zlib license:
 http://www.zlib.net/zlib_license.html
 
+2023-03-06 Version 0.40
+		- Added initializing parameters for CWorksheet (thanks to Tony Kennedy).
+		- Added function GetDim to scratch sheet and updated SimpleScratch.cpp example (thanks for this work to E.Naumovich).
+
 2022-11-20 Version 0.39
 		- Redesigned function CWorkbook::Save( FILE * handle, bool CloseHandleAfterSave ) (thanks to E.Naumovich).
                 - Updated CMakeLists.txt (thanks to E.Naumovich).
@@ -31,7 +35,7 @@ http://www.zlib.net/zlib_license.html
 2022-05-20 Version 0.38
 		- Added scratch sheet with matrix-type access to cells (writing only) (thanks for this work to E.Naumovich).
        		- Added example for a scratch sheet (thanks for this work to E.Naumovich).
-		- Fixed non-Windows build error due to incorrect  implementation of the CWorkbook::Save function.
+		- Fixed non-Windows build error due to incorrect implementation of the CWorkbook::Save function.
 
 2021-09-26 Version 0.37
 		- Added function CWorkbook::Save( FILE * handle, bool CloseHandleAfterSave ) for saving to a file/stream by its handle (thanks for this work to E.Naumovich).

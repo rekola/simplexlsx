@@ -101,39 +101,45 @@ class CWorkbook
         // @section    User interface
 
         //Adds another data sheet into the workbook
-        inline CWorksheet & AddSheet( const std::string & title )
+        inline CWorksheet & AddSheet( const std::string & title, const CWorksheet::SParams & Params = CWorksheet::SParams() )
         {
-            return CreateSheet( NormalizeSheetName( title ) );
+            return CreateSheet( NormalizeSheetName( title ), Params );
         }
-        inline CWorksheet & AddSheet( const std::wstring & title )
+        inline CWorksheet & AddSheet( const std::wstring & title, const CWorksheet::SParams & Params = CWorksheet::SParams() )
         {
-            return CreateSheet( NormalizeSheetName( title ) );
+            return CreateSheet( NormalizeSheetName( title ), Params );
         }
-        inline CWorksheet & AddSheet( const std::string & title, const std::vector<ColumnWidth> & colWidths )
+        inline CWorksheet & AddSheet( const std::string & title, const std::vector<ColumnWidth> & colWidths,
+                                      const CWorksheet::SParams & Params = CWorksheet::SParams() )
         {
-            return CreateSheet( NormalizeSheetName( title ), colWidths );
+            return CreateSheet( NormalizeSheetName( title ), colWidths, Params );
         }
-        inline CWorksheet & AddSheet( const std::wstring & title, const std::vector<ColumnWidth> & colWidths )
+        inline CWorksheet & AddSheet( const std::wstring & title, const std::vector<ColumnWidth> & colWidths,
+                                      const CWorksheet::SParams & Params = CWorksheet::SParams() )
         {
-            return CreateSheet( NormalizeSheetName( title ), colWidths );
-        }
-        inline CWorksheet & AddSheet( const std::string & title, uint32_t frozenWidth, uint32_t frozenHeight )
-        {
-            return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight );
-        }
-        inline CWorksheet & AddSheet( const std::wstring & title, uint32_t frozenWidth, uint32_t frozenHeight )
-        {
-            return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight );
+            return CreateSheet( NormalizeSheetName( title ), colWidths, Params );
         }
         inline CWorksheet & AddSheet( const std::string & title, uint32_t frozenWidth, uint32_t frozenHeight,
-                                      const std::vector<ColumnWidth> & colWidths )
+                                      const CWorksheet::SParams & Params = CWorksheet::SParams() )
         {
-            return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight, colWidths );
+            return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight, Params );
         }
         inline CWorksheet & AddSheet( const std::wstring & title, uint32_t frozenWidth, uint32_t frozenHeight,
-                                      const std::vector<ColumnWidth> & colWidths )
+                                      const CWorksheet::SParams & Params = CWorksheet::SParams() )
         {
-            return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight, colWidths );
+            return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight, Params );
+        }
+        inline CWorksheet & AddSheet( const std::string & title, uint32_t frozenWidth, uint32_t frozenHeight,
+                                      const std::vector<ColumnWidth> & colWidths,
+                                      const CWorksheet::SParams & Params = CWorksheet::SParams() )
+        {
+            return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight, colWidths, Params );
+        }
+        inline CWorksheet & AddSheet( const std::wstring & title, uint32_t frozenWidth, uint32_t frozenHeight,
+                                      const std::vector<ColumnWidth> & colWidths,
+                                      const CWorksheet::SParams & Params = CWorksheet::SParams() )
+        {
+            return CreateSheet( NormalizeSheetName( title ), frozenWidth, frozenHeight, colWidths, Params );
         }
 
         //Adds chart into the data sheet
@@ -202,11 +208,11 @@ class CWorkbook
         CWorkbook( const CWorkbook & that );
         CWorkbook & operator=( const CWorkbook & );
 
-        CWorksheet & CreateSheet( const UniString & title );
-        CWorksheet & CreateSheet( const UniString & title, const std::vector<ColumnWidth> & colWidths );
-        CWorksheet & CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight );
+        CWorksheet & CreateSheet( const UniString & title, const CWorksheet::SParams & Params );
+        CWorksheet & CreateSheet( const UniString & title, const std::vector<ColumnWidth> & colWidths, const CWorksheet::SParams & Params );
+        CWorksheet & CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight, const CWorksheet::SParams & Params );
         CWorksheet & CreateSheet( const UniString & title, uint32_t frozenWidth, uint32_t frozenHeight,
-                                  const std::vector<ColumnWidth> & colWidths );
+                                  const std::vector<ColumnWidth> & colWidths, const CWorksheet::SParams & Params );
         CWorksheet & InitWorkSheet( CWorksheet * sheet, const UniString & title );
 
         CChartsheet & CreateChartSheet( const UniString & title, EChartTypes type );
