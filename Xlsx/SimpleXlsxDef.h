@@ -43,7 +43,7 @@
 
 #include "../UTF8Encoder.hpp"
 
-#define SIMPLE_XLSX_VERSION	"0.40"
+#define SIMPLE_XLSX_VERSION	"0.41"
 
 namespace SimpleXlsx
 {
@@ -350,7 +350,9 @@ class CellCoord
         static const uint8_t ColStrOffset = 11;
 
     public:
-        typedef char TConvBuf[ 24 ];    // Max string for $Col$Row\0
+        static const uint8_t ConvBufSize = 24;
+        typedef char TConvBuf[ ConvBufSize ];   // Max string for $Col$Row\0
+
         static const uint32_t   MinRow = 1, MinCol = 0;
         static const uint32_t   MaxRows = 1048576, MaxCols = 16384; // Excel limits
         uint32_t row;	///< row (starts from 1)

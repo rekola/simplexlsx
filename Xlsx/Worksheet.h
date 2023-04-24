@@ -49,16 +49,8 @@ class CWorksheet : public CSheet
             PAGE_LANDSCAPE
         };
 
-        /// @brief The SParams struct The parameters of the sheet that are saved in an XLSX file and must be known before creating a Worksheet.
-        /// Fill in carefully. If the values are incorrect, Excel can report a corrupted file. The default values are correct.
-        struct SParams
-        {
-            // Tag "dimension" of the sheet
-            CellCoord   FirstUsedCell;      ///< First used cell with formulas, text content or cell formatting
-            CellCoord   LastUsedCell;       ///< Last used cell with formulas, text content or cell formatting
-        };
-
     private:
+        std::string             m_FileName;         ///< file name of the destination xml
         XMLWriter       *       m_XMLWriter;        ///< xml output stream
         std::vector<std::string>m_calcChain;        ///< list of cells with formulae
         std::map<std::string, uint64_t> * m_sharedStrings; ///< pointer to the list of string supposed to be into shared area
@@ -73,6 +65,10 @@ class CWorksheet : public CSheet
         bool					m_row_opened;		///< indicates whether row tag is opened
         uint32_t				m_current_column;	///< used at separate row generation - last cell column number to be added
         uint32_t				m_offset_column;	///< used at entire row addition (implicit parameter for AddCell method)
+
+        std::streamoff          m_DimensionOffset;  ///< offset in bytes for @dimension@ tag in output file
+        CellCoord               m_UsedCellFirst;    ///< First used cell with formulas, text content or cell formatting
+        CellCoord               m_UsedCellLast;     ///< Last used cell with formulas, text content or cell formatting
 
         EPageOrientation		m_page_orientation;	///< defines page orientation for printing
 
@@ -187,11 +183,11 @@ class CWorksheet : public CSheet
         }
 
     protected:
-        CWorksheet( size_t index, CDrawing & drawing, PathManager & pathmanager, const SParams & Params );
-        CWorksheet( size_t index, const std::vector<ColumnWidth> & colHeights, CDrawing & drawing, PathManager & pathmanager, const SParams & Params );
-        CWorksheet( size_t index, uint32_t width, uint32_t height, CDrawing & drawing, PathManager & pathmanager, const SParams & Params );
+        CWorksheet( size_t index, CDrawing & drawing, PathManager & pathmanager );
+        CWorksheet( size_t index, const std::vector<ColumnWidth> & colHeights, CDrawing & drawing, PathManager & pathmanager );
+        CWorksheet( size_t index, uint32_t width, uint32_t height, CDrawing & drawing, PathManager & pathmanager );
         CWorksheet( size_t index, uint32_t width, uint32_t height, const std::vector<ColumnWidth> & colHeights,
-                    CDrawing & drawing, PathManager & pathmanager, const SParams & Params );
+                    CDrawing & drawing, PathManager & pathmanager );
         virtual ~CWorksheet();
 
     private:
@@ -200,13 +196,14 @@ class CWorksheet : public CSheet
         CWorksheet & operator=( const CWorksheet & );
 
         bool Save();
+        bool UpdateTableDimension();
 
         // *INDENT-OFF*   For AStyle tool
         inline void     SetSharedStr( std::map<std::string, uint64_t> * share ) { m_sharedStrings = share; }
         inline void     SetComments( std::vector<Comment> * share )             { m_comments = share; }
         // *INDENT-ON*   For AStyle tool
 
-        void Init( uint32_t frozenWidth, uint32_t frozenHeight, const std::vector<ColumnWidth> & colHeights, const SParams & Params );
+        void Init( uint32_t frozenWidth, uint32_t frozenHeight, const std::vector<ColumnWidth> & colHeights );
         void AddFrozenPane( uint32_t width, uint32_t height );
 
         template<typename T>
@@ -215,15 +212,19 @@ class CWorksheet : public CSheet
         void AddRowHeader( std::size_t Size, double Height );
         void AddRowFooter() const;
 
+        void CheckUsedCells( uint32_t Col );
+
         template<typename T>
         CWorksheet & AddRowTempl( const std::vector<T> & data, uint32_t offset, double height );
 
         bool SaveSheetRels();
 
-        inline std::string GetCellCoordStrAndIncColumn()
+        inline std::string GetCellCoordStrAndCheckUsedCellsAndIncColumn()
         {
-            std::string Result = CellCoord( m_row_index, m_offset_column + m_current_column ).ToString();
+            const uint32_t FactColumn = m_offset_column + m_current_column;
+            std::string Result = CellCoord( m_row_index, FactColumn ).ToString();
             m_current_column++;
+            CheckUsedCells( FactColumn );
             return Result;
         }
 

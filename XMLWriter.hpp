@@ -25,7 +25,7 @@
 #include <cassert>
 #include <limits>
 #include <iostream>
-#include <ostream>
+#include <fstream>
 #include <stack>
 #include <string>
 
@@ -62,6 +62,17 @@ class XMLWriter
         std::streamsize SetFloatPrecision( std::streamsize NewPrecision )
         {
             return m_OStream.precision( NewPrecision );
+        }
+
+        std::streamoff GetCurrentPosition()
+        {
+            return m_OStream.tellp();
+        }
+
+        inline XMLWriter & Raw( const char * Str, size_t Len )
+        {
+            m_OStream.write( Str, Len );
+            return * this;
         }
 
         //Light version without using stack of Tag Names.
@@ -105,7 +116,8 @@ class XMLWriter
         {
             assert( ! m_Tags.empty() );
             DebugCheckIsLightTagOpened();
-            if( m_SelfClosed ) m_OStream << "/>";
+            if( m_SelfClosed )
+                m_OStream << "/>";
             else m_OStream << "</" << m_Tags.top() << '>';
 #ifndef NDEBUG
             if( TagName != NULL )
@@ -252,7 +264,8 @@ class XMLWriter
 
         inline void CloseOpenedTag()
         {
-            if( ! m_TagOpen ) return;
+            if( ! m_TagOpen )
+                return;
             m_OStream.put( '>' );
             m_TagOpen = false;
         }

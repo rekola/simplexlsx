@@ -24,6 +24,9 @@ https://sourceforge.net/projects/simplexlsx/
 This library is distributed under the terms of the zlib license:
 http://www.zlib.net/zlib_license.html
 
+2023-04-24 Version 0.41
+		- Removed initializing parameters for CWorksheet (since version 0.40) because found other solution.
+
 2023-03-06 Version 0.40
 		- Added initializing parameters for CWorksheet (thanks to Tony Kennedy).
 		- Added function GetDim to scratch sheet and updated SimpleScratch.cpp example (thanks for this work to E.Naumovich).
