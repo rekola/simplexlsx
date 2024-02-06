@@ -596,7 +596,7 @@ CImage * CWorkbook::CreateImage( const std::string & filename )
         if( LastPoint == filename.npos )    //No extension
             return NULL;
         std::string Ext = filename.substr( LastPoint );
-        std::transform( Ext.begin(), Ext.end(), Ext.begin(), ::tolower );
+        std::transform( Ext.begin(), Ext.end(), Ext.begin(), static_cast<int(*)(int)>(::tolower) ); // Cast ::tolower picks the correct fn.
         std::ifstream imfile( filename.c_str(), std::ios::binary );
         if( ! imfile.is_open() )            //File not exist or busy
             return NULL;
