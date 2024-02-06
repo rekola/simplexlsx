@@ -506,7 +506,7 @@ void CChart::AddLineChart( XMLWriter & xmlw, Axis & xAxis, uint32_t yAxisId, con
                 case Series::dashDash:      dashID = "dash"; break;
                 default:;
             }
-            xmlw.Tag( "c:spPr" ).Tag( "a:ln" ).Attr( "w", floor( it->LineWidth * 12700 ) );
+            xmlw.Tag( "c:spPr" ).Tag( "a:ln" ).Attr( "w", std::floor( it->LineWidth * 12700 ) );
             if( it->LineColor.size() == 6 )
             {
                 xmlw.Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", it->LineColor ).EndL().End( "a:solidFill" );
@@ -701,7 +701,7 @@ void CChart::AddScatterChart( XMLWriter & xmlw, uint32_t xAxisId, uint32_t yAxis
 
                 default:;
             }
-            xmlw.Tag( "c:spPr" ).Tag( "a:ln" ).Attr( "w", floor( it->LineWidth * 12700 ) );
+            xmlw.Tag( "c:spPr" ).Tag( "a:ln" ).Attr( "w", std::floor( it->LineWidth * 12700 ) );
             if( it->LineColor.size() == 6 )
             {
                 xmlw.Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", it->LineColor ).EndL().End( "a:solidFill" );
@@ -788,7 +788,7 @@ void CChart::AddMarker( XMLWriter & xmlw, const CChart::Series & ser, const char
         if( IsFillColor )
             xmlw.Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", ser.Marker.FillColor ).EndL().End( "a:solidFill" ); // marker fill
         if( IsLineColor )
-            xmlw.Tag( "a:ln" ).Attr( "w", floor( ser.Marker.LineWidth * 12700 ) ).Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", ser.Marker.LineColor ).EndL().End( "a:solidFill" ).End( "a:ln" ); // marker line
+            xmlw.Tag( "a:ln" ).Attr( "w", std::floor( ser.Marker.LineWidth * 12700 ) ).Tag( "a:solidFill" ).TagL( "a:srgbClr" ).Attr( "val", ser.Marker.LineColor ).EndL().End( "a:solidFill" ).End( "a:ln" ); // marker line
         xmlw.End( "c:spPr" );
     }
     xmlw.End( "c:marker" );

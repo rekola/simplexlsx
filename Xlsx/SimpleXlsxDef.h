@@ -32,6 +32,8 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <cmath>
+#include <cstdio>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -406,7 +408,7 @@ class CellCoord
                 * StartPtr = '$';
                 Buffer[ CellCoord::ColStrOffset + 1 ] = '$';
             }
-            sprintf( Buffer + CellCoord::ColStrOffset + ( AbsColAndRow ? 2 : 1 ), "%u", row );
+            std::sprintf( Buffer + CellCoord::ColStrOffset + ( AbsColAndRow ? 2 : 1 ), "%u", row );
             return StartPtr;
         }
 };
