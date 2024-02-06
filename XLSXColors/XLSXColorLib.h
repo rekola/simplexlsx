@@ -32,7 +32,7 @@ namespace SimpleXlsx
      XLSXColorLib(){};
      virtual ~XLSXColorLib();
      void AddColor(const char * id, const clsRGBColorRecord & cl){ lib[id]=cl;  };
-     const char * GetColor(const char * id) { return lib.at(id).Get(); };
+     const char * GetColor(const char * id) { return lib[id].Get(); };
      void Clear() { lib.clear(); };
    };
  extern void make_grayscale10(XLSXColorLib & xlib);
