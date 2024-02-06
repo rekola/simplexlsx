@@ -130,13 +130,13 @@ char * SimpleXlsx::CellCoord::ToStringAbs( SimpleXlsx::CellCoord::TConvBuf & Buf
 
 
 
-double SimpleXlsx::CellDataTime::From_time_t( time_t val )
+double SimpleXlsx::CellDataTime::From_time_t( std::time_t val )
 {
     const int64_t secondsFrom1900to1970 = 2208988800u;
     const double excelOneSecond = 0.0000115740740740741;
-    struct tm * t = localtime( & val );
+    struct std::tm * t = std::localtime( & val );
 
-    time_t timeSinceEpoch = t->tm_sec + t->tm_min * 60 + t->tm_hour * 3600 + t->tm_yday * 86400 +
+    std::time_t timeSinceEpoch = t->tm_sec + t->tm_min * 60 + t->tm_hour * 3600 + t->tm_yday * 86400 +
                             ( t->tm_year - 70 ) * 31536000 + ( ( t->tm_year - 69 ) / 4 ) * 86400 -
                             ( ( t->tm_year - 1 ) / 100 ) * 86400 + ( ( t->tm_year + 299 ) / 400 ) * 86400;
 

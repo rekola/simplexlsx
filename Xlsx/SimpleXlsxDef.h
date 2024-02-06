@@ -477,7 +477,7 @@ class CellDataTime
         size_t style_id;
 
         inline CellDataTime() : style_id( 0 ), m_xlsx_val( 0.0 ) {}
-        inline CellDataTime( time_t _val, size_t _style_id = 0 ) : style_id( _style_id ), m_xlsx_val( From_time_t( _val ) ) {}
+        inline CellDataTime( std::time_t _val, size_t _style_id = 0 ) : style_id( _style_id ), m_xlsx_val( From_time_t( _val ) ) {}
 
         // Year must be in the range 1900 to 9999, month must be in the range 1 to 12, and day must be in the range 1 to 31.
         // Hour must be in the range 0 to 23, minute and second must be in the range 0 to 59, and millisecond must be in the range 0 to 999.
@@ -493,12 +493,12 @@ class CellDataTime
             return *this;
         }
 
-        inline CellDataTime & operator=( time_t _val )
+        inline CellDataTime & operator=( std::time_t _val )
         {
             return SetDateTime( _val );
         }
 
-        inline CellDataTime & SetDateTime( time_t val )
+        inline CellDataTime & SetDateTime( std::time_t val )
         {
             m_xlsx_val = From_time_t( val );
             return * this;
@@ -545,7 +545,7 @@ class CellDataTime
     private:
         double m_xlsx_val;
 
-        static double From_time_t( time_t val );
+        static double From_time_t( std::time_t val );
         // Year must be in the range 1900 to 9999, month must be in the range 1 to 12, and day must be in the range 1 to 31.
         // Hour must be in the range 0 to 23, minute and second must be in the range 0 to 59, and millisecond must be in the range 0 to 999.
         static double FromGregorian( uint16_t year, uint16_t month, uint16_t day, uint16_t hour, uint16_t minute, uint16_t second, uint16_t millisecond = 0 );
