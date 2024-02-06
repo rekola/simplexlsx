@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iomanip>
+#include <fstream>
 
 #include "Worksheet.h"
 #include "XlsxHeaders.h"
@@ -443,7 +444,7 @@ bool CWorksheet::UpdateTableDimension()
         return true;
     try
     {
-        std::fstream f( m_FileName );
+        std::fstream f( m_FileName.c_str() );
         if( ! f.is_open() )
             return false;
         f.seekp( m_DimensionOffset );
