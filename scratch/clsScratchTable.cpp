@@ -72,9 +72,9 @@ void clsCell::InsertTo(SimpleXlsx::CWorksheet & sheet)const{
 //-----------------------------------------------
  bool clsScratchTable::Del(const size_t row, const size_t col){
     auto rs=false;
-    for(auto & cl:Cells){
-      if(cl.row==row&&cl.col==col){
-       cl.priority=1; // mark cell to delete
+    for (int i = 0; i < Cells.size(); ++i){
+      if(Cells[i].row==row&&Cells[i].col==col){
+       Cells[i].priority=1; // mark cell to delete
        rs=true;
        continue;
       }
@@ -89,7 +89,7 @@ void clsCell::InsertTo(SimpleXlsx::CWorksheet & sheet)const{
   // remove overwitten or deleted cells
    std::vector<clsCell> cells;
    cells.push_back(Cells.front());
-   for(auto cl=Cells.cbegin()+1;cl!=Cells.cend();cl++){
+   for(std::vector<clsCell>::iterator cl=Cells.begin()+1;cl!=Cells.end();cl++){
    if(cl->check(cells.back())&&cl->priority<1)
         cells.push_back(*cl);
     }
@@ -98,9 +98,9 @@ void clsCell::InsertTo(SimpleXlsx::CWorksheet & sheet)const{
 //---------------------------------------------------
  size_t clsScratchTable::FindRowEntry(const size_t row, const size_t from){
    size_t cmax=Cells.size(); // default value- not found/empty
-   for(auto cl=Cells.cbegin()+from;cl!=Cells.cend();cl++){
+   for(std::vector<clsCell>::iterator cl=Cells.begin()+from;cl!=Cells.end();cl++){
     if(cl->row<row) continue;
-    if(cl->row==row) {cmax=cl-Cells.cbegin(); break;};
+    if(cl->row==row) {cmax=cl-Cells.begin(); break;};
     if(cl->row>row) break; // row is empty, so it was not found
    }
    return cmax;
@@ -108,15 +108,15 @@ void clsCell::InsertTo(SimpleXlsx::CWorksheet & sheet)const{
 //--------------------------------------------------------------
 
 size_t clsScratchTable::FindLastCol(const size_t row, const size_t from){
- for(auto cl=Cells.cbegin()+from;cl!=Cells.cend();cl++)
-   if(cl->row!=row) return cl-Cells.cbegin()-1;
+ for(std::vector<clsCell>::iterator cl=Cells.begin()+from;cl!=Cells.end();cl++)
+   if(cl->row!=row) return cl-Cells.begin()-1;
  return Cells.size()-1;
 };
 //-------------------------------------------------------------
 size_t clsScratchTable::FindCell(const size_t row,const size_t col, const size_t from){
-  for(auto cl=Cells.cbegin()+from;cl!=Cells.cend();cl++){
+  for(std::vector<clsCell>::iterator cl=Cells.begin()+from;cl!=Cells.end();cl++){
    if(cl->row!=row) break;
-   if(cl->row==row&&cl->col==col) return cl-Cells.cbegin();
+   if(cl->row==row&&cl->col==col) return cl-Cells.begin();
   }
  return Cells.size();
 };
@@ -171,10 +171,10 @@ size_t clsScratchTable::FindCell(const size_t row,const size_t col, const size_t
  void clsScratchTable::GetDim(size_t &rw, size_t & cl) const  {
  rw=0;
  cl=0;
- for(const auto &c:Cells)
-     if(c.priority<1){
-        if(c.row>rw) rw=c.row; 
-        if(c.col>cl) cl=c.col;
+ for (int i = 0; i < Cells.size(); ++i)
+     if(Cells[i].priority<1){
+        if(Cells[i].row>rw) rw=Cells[i].row; 
+        if(Cells[i].col>cl) cl=Cells[i].col;
      }
   rw++;
 };
