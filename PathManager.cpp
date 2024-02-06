@@ -27,6 +27,7 @@
 #include <iostream>
 
 #include <stdint.h>
+#include <stdio.h>
 
 #include "PathManager.hpp"
 
@@ -128,8 +129,8 @@ namespace SimpleXlsx
         int Length = static_cast< int >( wcslen( Path ) );
         int ResultSize = WideCharToMultiByte( CP_ACP, 0, Path, Length, NULL, 0, NULL, NULL );
         std::vector<char> AnsiFileName( ResultSize + 1, 0 );
-        WideCharToMultiByte( CP_ACP, 0, Path, Length, AnsiFileName.data(), ResultSize, NULL, NULL );
-        return AnsiFileName.data();
+        WideCharToMultiByte( CP_ACP, 0, Path, Length, &AnsiFileName.front(), ResultSize, NULL, NULL );
+        return &AnsiFileName.front();
     }
 #endif
 

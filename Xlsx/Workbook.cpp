@@ -318,7 +318,7 @@ bool CWorkbook::Save( const std::wstring & filename )
 /// @return Boolean result of the operation
 // ****************************************************************************
 #ifdef _WIN32
-bool CWorkbook::Save( FILE * HF, bool CloseHandleAfterSave )
+bool CWorkbook::Save( std::FILE * HF, bool CloseHandleAfterSave )
 {
     int dfl = fileno( HF );
     HANDLE * H = static_cast< HANDLE * >( HANDLE( _get_osfhandle( dfl ) ) );
@@ -596,7 +596,7 @@ CImage * CWorkbook::CreateImage( const std::string & filename )
         if( LastPoint == filename.npos )    //No extension
             return NULL;
         std::string Ext = filename.substr( LastPoint );
-        std::transform( Ext.begin(), Ext.end(), Ext.begin(), ::tolower );
+        std::transform( Ext.begin(), Ext.end(), Ext.begin(), static_cast<int(*)(int)>(::tolower) ); // Cast ::tolower picks the correct fn.
         std::ifstream imfile( filename.c_str(), std::ios::binary );
         if( ! imfile.is_open() )            //File not exist or busy
             return NULL;
@@ -1199,8 +1199,8 @@ std::string CWorkbook::CurrencySymbol()
     if( Utf8BufSize == 0 )
         return "?";
     std::vector<char> SingleBuf( Utf8BufSize );
-    Utf8BufSize = WideCharToMultiByte( CP_UTF8, 0, ChBuf, ChCount, SingleBuf.data(), Utf8BufSize, NULL, NULL );
-    return Utf8BufSize == 0 ? "?" : SingleBuf.data();
+    Utf8BufSize = WideCharToMultiByte( CP_UTF8, 0, ChBuf, ChCount, &SingleBuf.front(), Utf8BufSize, NULL, NULL );
+    return Utf8BufSize == 0 ? "?" : &SingleBuf.front();
 #else
     std::locale loc( "" );
     std::wstring CurrencySymbol = std::use_facet<std::moneypunct<wchar_t> >( loc ).curr_symbol();
@@ -1624,7 +1624,7 @@ bool CWorkbook::SaveWorkbook()
         for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
         {
             //sprintf( szId, "rId%zu", ( * it )->GetIndex() );
-            sprintf( szId, "rId%u", unsigned( ( * it )->GetIndex() ) );
+            std::sprintf( szId, "rId%u", unsigned( ( * it )->GetIndex() ) );
             std::stringstream PropValue;
             PropValue << "worksheets/sheet" << ( * it )->GetIndex() << ".xml";
             xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_sheet ).Attr( "Target", PropValue.str() ).EndL();
@@ -1633,7 +1633,7 @@ bool CWorkbook::SaveWorkbook()
         for( std::vector<CChartsheet *>::const_iterator it = m_chartsheets.begin(); it != m_chartsheets.end(); it++ )
         {
             //sprintf( szId, "rId%zu", ( * it )->GetIndex() );
-            sprintf( szId, "rId%u", unsigned( ( * it )->GetIndex() ) );
+            std::sprintf( szId, "rId%u", unsigned( ( * it )->GetIndex() ) );
             std::stringstream PropValue;
             PropValue << "chartsheets/sheet" << ( * it )->GetIndex() << ".xml";
             xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_chartsheet ).Attr( "Target", PropValue.str() ).EndL();
@@ -1642,20 +1642,20 @@ bool CWorkbook::SaveWorkbook()
         if( bFormula )
         {
             //sprintf( szId, "rId%zu", id++ );
-            sprintf( szId, "rId%u", unsigned( id++ ) );
+            std::sprintf( szId, "rId%u", unsigned( id++ ) );
             xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_chain ).Attr( "Target", "calcChain.xml" ).EndL();
         }
         if( ! m_sharedStrings.empty() )
         {
             //sprintf( szId, "rId%zu", id++ );
-            sprintf( szId, "rId%u", unsigned( id++ ) );
+            std::sprintf( szId, "rId%u", unsigned( id++ ) );
             xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_sharedStr ).Attr( "Target", "sharedStrings.xml" ).EndL();
         }
         //sprintf( szId, "rId%zu", id++ );
-        sprintf( szId, "rId%u", unsigned( id++ ) );
+        std::sprintf( szId, "rId%u", unsigned( id++ ) );
         xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_style ).Attr( "Target", "styles.xml" ).EndL();
         //sprintf( szId, "rId%zu", id++ );
-        sprintf( szId, "rId%u", unsigned( id++ ) );
+        std::sprintf( szId, "rId%u", unsigned( id++ ) );
         xmlw.TagL( "Relationship" ).Attr( "Id", szId ).Attr( "Type", type_theme ).Attr( "Target", "theme/theme1.xml" ).EndL();
 
         xmlw.End( "Relationships" );
@@ -1681,7 +1681,7 @@ bool CWorkbook::SaveWorkbook()
             for( size_t i = 1; i < m_sheetId; i++ )
             {
                 //sprintf( szId, "rId%zu", i );
-                sprintf( szId, "rId%u", unsigned( i ) );
+                std::sprintf( szId, "rId%u", unsigned( i ) );
                 bool Found = false;
                 for( std::vector<CWorksheet *>::const_iterator it = m_worksheets.begin(); it != m_worksheets.end(); it++ )
                     if( i == ( * it )->GetIndex() )

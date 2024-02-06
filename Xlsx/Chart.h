@@ -161,12 +161,12 @@ class CChart
             private:
                 // int - Pos in Gradient stops from 0 to 100 in percent
                 // std::string - Color RGB string like "FF00FF"
-                typedef typename std::map< int, std::string > Container;
+                typedef std::map< int, std::string > Container;
 
                 Container m_Points;
 
             public:
-                typedef typename Container::const_iterator const_iterator;
+                typedef Container::const_iterator const_iterator;
 
                 // *INDENT-OFF*   For AStyle tool
                 inline const_iterator begin() const { return m_Points.begin(); }

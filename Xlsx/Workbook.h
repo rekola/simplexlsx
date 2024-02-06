@@ -195,7 +195,7 @@ class CWorkbook
         // Save current workbook
         bool Save( const std::string & filename );
         bool Save( const std::wstring & filename );
-        bool Save( FILE * HF, bool CloseHandleAfterSave );
+        bool Save( std::FILE * HF, bool CloseHandleAfterSave );
 
     private:
         // Disable copy and assignment
