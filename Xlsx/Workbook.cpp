@@ -1199,8 +1199,8 @@ std::string CWorkbook::CurrencySymbol()
     if( Utf8BufSize == 0 )
         return "?";
     std::vector<char> SingleBuf( Utf8BufSize );
-    Utf8BufSize = WideCharToMultiByte( CP_UTF8, 0, ChBuf, ChCount, SingleBuf.data(), Utf8BufSize, NULL, NULL );
-    return Utf8BufSize == 0 ? "?" : SingleBuf.data();
+    Utf8BufSize = WideCharToMultiByte( CP_UTF8, 0, ChBuf, ChCount, &SingleBuf.front(), Utf8BufSize, NULL, NULL );
+    return Utf8BufSize == 0 ? "?" : &SingleBuf.front();
 #else
     std::locale loc( "" );
     std::wstring CurrencySymbol = std::use_facet<std::moneypunct<wchar_t> >( loc ).curr_symbol();
