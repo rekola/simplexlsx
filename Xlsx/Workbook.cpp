@@ -907,7 +907,7 @@ bool CWorkbook::SaveTheme()
     xmlw.Tag( "a:effectStyle" ).Tag( "a:effectLst" );
     /**/xmlw.Tag( "a:outerShdw" ).Attr( "blurRad", 40000 ).Attr( "dist", 23000 ).Attr( "dir", 5400000 ).Attr( "rotWithShape", 0 );
     /**/xmlw.Tag( "a:srgbClr" ).Attr( "val", "000000" ).TagL( "a:alpha" ).Attr( "val", 35000 ).EndL().End().End();
-    xmlw.End( "a:effectLst" );
+    xmlw.End( "a:effectLst" ).End("a:effectStyle");
     xmlw.Tag( "a:scene3d" );
     /**/xmlw.Tag( "a:camera" ).Attr( "prst", "orthographicFront" );
     /**/xmlw.TagL( "a:rot" ).Attr( "lat", 0 ).Attr( "lon", 0 ).Attr( "rev", 0 ).EndL().End();
@@ -915,7 +915,6 @@ bool CWorkbook::SaveTheme()
     /**/xmlw.TagL( "a:rot" ).Attr( "lat", 0 ).Attr( "lon", 0 ).Attr( "rev", 1200000 ).EndL().End();
     xmlw.End( "a:scene3d" );
     xmlw.Tag( "a:sp3d" ).Tag( "a:bevelT" ).Attr( "w", 63500 ).Attr( "h", 25400 ).End().End();
-    xmlw.End( "a:effectStyle" );
     xmlw.End( "a:effectStyleLst" );
 
     xmlw.Tag( "a:bgFillStyleLst" );
