@@ -40,7 +40,7 @@ struct clsCell{
          float flv;
          int64_t liv;
          uint64_t uliv;
-         time_t  utv;
+         std::time_t  utv;
 #ifdef _WIN32
          SYSTEMTIME  wtv;
 #endif
@@ -82,13 +82,14 @@ struct clsCell{
  clsCell & Set(const unsigned int & _v){ vtype=UINTV; val.uiv=_v; return *this;};
  clsCell & Set(const double &       _v){ vtype=DBLV;  val.dbv=_v; return *this;};
  clsCell & Set(const float &        _v){ vtype=FLOV;  val.flv=_v; return *this;};
- clsCell & Set(const time_t &       _v){ vtype=UTV;   memcpy((void*)&val.utv,&_v, sizeof(_v));return *this;};
+ clsCell & Set(const std::time_t &       _v){ vtype=UTV;   memcpy((void*)&val.utv,&_v, sizeof(_v));return *this;};
 #ifdef _WIN32
  clsCell & Set(const SYSTEMTIME &   _v){ vtype=WTV;   memcpy((void*)&val.wtv,&_v, sizeof(_v));return *this;};
 #endif
  clsCell & Set(const std::string &  _v){ vtype=STRV;  strv=_v;    return *this;};
  clsCell & Set(const std::wstring & _v){ vtype=WSTRV; wstrv=_v;   return *this;};
- clsCell & Set(const std::nullptr_t _v){ vtype=EMPTYV;strv.clear();wstrv.clear(); memset(&val,0,sizeof(val));(void)_v;return *this;};
+ // before C++11 not supported std::nullptr_t
+ //clsCell & Set(const std::nullptr_t _v){ vtype=EMPTYV;strv.clear();wstrv.clear(); memset(&val,0,sizeof(val));(void)_v;return *this;};
 
 //----------------------------
    clsCell():vtype(EMPTYV),Style(0),stError(0),row(0),col(0) {memset(&val,0,sizeof(val));};

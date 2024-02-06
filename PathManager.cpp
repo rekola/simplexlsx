@@ -27,6 +27,7 @@
 #include <iostream>
 
 #include <stdint.h>
+#include <stdio.h>
 
 #include "PathManager.hpp"
 
